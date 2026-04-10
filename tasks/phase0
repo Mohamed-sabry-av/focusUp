@@ -1,0 +1,328 @@
+FocusUP Clone
+Phase 0  ·  Foundation
+Task Board  ·  MVP Build
+Better T Stack  ·  Express + Next.js  ·  Turborepo + Bun
+April 2026  ·  Version 1.0
+
+Phase 0 — Overview
+
+Phase 0 establishes the complete foundation for the FocusUP Clone. By the end of this phase, the monorepo is fully wired, all infrastructure services are running locally via Docker, the database schema is migrated, and both the Express server and Next.js web app can communicate end-to-end.
+
+✓  The Better T Stack scaffold is already in place. Phase 0 is not a setup from scratch — the goal is to wire the existing pieces together and adapt them to the FocusUP domain.
+
+
+Stack Reference
+
+Layer
+Technology
+Backend
+Express 5  ·  oRPC  ·  Bun runtime
+Frontend
+Next.js 16  ·  TanStack Query  ·  oRPC client
+Database
+PostgreSQL 17  ·  Prisma 7  ·  pg adapter
+Monorepo
+Turborepo  ·  Bun workspaces
+Infrastructure
+Docker Compose  (Postgres · Redis · MinIO)
+Video
+LiveKit Cloud  (credentials only in Phase 0)
+
+
+Deliverables
+
+Monorepo runs without errors (bun install + bun run dev)
+3 Docker services running: PostgreSQL 17, Redis, MinIO
+Environment variables configured for server + web
+Prisma schema for FocusUP domain (User, Session, Reflection, Report, Block)
+Database migration successful + Prisma Studio running
+Prisma Client singleton ready in packages/db
+Health check endpoint returns DB connected
+LiveKit credentials stored and ready for Phase 1
+turbo.json updated with globalEnv
+
+
+Tasks
+
+STEP
+01
+Verify Monorepo Boots
+Confirm the existing scaffold boots cleanly before making any changes
+VERIFICATION
+1.1
+Run bun install from the root and confirm no errors
+1.2
+Run bun run dev and confirm the server responds at localhost:3000
+1.3
+Confirm the web app is running at localhost:3001
+1.4
+Open localhost:3000 in the browser and confirm the response is "OK"
+
+
+STEP
+02
+Docker Compose — Infrastructure Services
+Create docker-compose.yml in infrastructure/ with 3 services
+INFRASTRUCTURE
+2.1
+Create the infrastructure/ folder in the root if it does not exist
+2.2
+Create infrastructure/docker-compose.yml with PostgreSQL 17 Alpine on port 5432
+2.3
+Add Redis 7 Alpine on port 6379 with a persistent volume
+2.4
+Add MinIO on port 9000 (S3 API) and port 9001 (Web Console)
+2.5
+Run docker compose up -d and confirm all 3 services show status: running
+2.6
+Open localhost:9001 and confirm the MinIO Console loads
+
+
+STEP
+03
+Environment Variables
+Set up .env files for both the server and web apps
+CONFIGURATION
+3.1
+Open apps/server/.env and add DATABASE_URL pointing to the Docker Postgres instance
+3.2
+Add DIRECT_URL with the same connection string
+3.3
+Add REDIS_URL pointing to the Docker Redis instance
+3.4
+Add MINIO_ENDPOINT, MINIO_PORT, MINIO_ACCESS_KEY, and MINIO_SECRET_KEY
+3.5
+Add MINIO_BUCKET_PUBLIC and MINIO_BUCKET_PRIVATE
+3.6
+Add JWT_SECRET (minimum 32 characters), JWT_ACCESS_EXPIRES, and JWT_REFRESH_EXPIRES
+3.7
+Add LIVEKIT_API_KEY, LIVEKIT_API_SECRET, and LIVEKIT_WS_URL (placeholder for now)
+3.8
+Open apps/web/.env and add NEXT_PUBLIC_SERVER_URL=http://localhost:3000
+3.9
+Add NEXT_PUBLIC_LIVEKIT_URL (placeholder for now)
+3.10
+Confirm .env is listed in .gitignore at the root level
+
+
+STEP
+04
+packages/env — Validate Schema
+Ensure the env package validates all new variables
+CONFIGURATION
+4.1
+Open packages/env and review the current server schema
+4.2
+Add DATABASE_URL and DIRECT_URL as required strings
+4.3
+Add REDIS_URL as a required string
+4.4
+Add JWT_SECRET (min 32 chars), JWT_ACCESS_EXPIRES, and JWT_REFRESH_EXPIRES
+4.5
+Add LIVEKIT_API_KEY, LIVEKIT_API_SECRET, and LIVEKIT_WS_URL
+4.6
+Add all MinIO-related variables
+4.7
+Run bun run dev and confirm there are no env validation errors
+
+
+STEP
+05
+Prisma Schema — FocusUP Domain
+Write the full schema in packages/db/prisma/schema.prisma
+DATABASE
+5.1
+Confirm the datasource uses DATABASE_URL and DIRECT_URL
+5.2
+Confirm the generator includes previewFeatures: ["driverAdapters"]
+5.3
+Add the enums: SessionStatus, PlanTier, Category, ReportReason, ReportStatus
+5.4
+Write the User model with all fields (id, email, passwordHash, displayName, username, timezone, planTier, strikeCount, ...)
+5.5
+Write the Session model with all fields (id, user1Id, user2Id, durationMin, status, scheduledAt, livekitRoomName, ...)
+5.6
+Write the Reflection model (id, sessionId, userId, text, rating)
+5.7
+Write the Report model (id, reporterId, reportedId, reason, status, ...)
+5.8
+Write the Block model (id, blockerId, blockedId) with @@unique([blockerId, blockedId])
+5.9
+Add @@index on Session for: status, scheduledAt, user1Id, user2Id
+5.10
+Add @@index on User for: email, username
+
+
+STEP
+06
+Run Database Migration
+Run the migration and verify all tables were created
+DATABASE
+6.1
+Run the migration from packages/db using: prisma migrate dev
+6.2
+Name the migration: init_focusup_schema
+6.3
+Confirm the migration completes without errors
+6.4
+Run prisma studio and verify all tables are present
+6.5
+Confirm the indexes were created on the Session and User tables
+
+
+STEP
+07
+Prisma Client Singleton — packages/db
+Configure the Prisma Client singleton in packages/db/src/index.ts using the PrismaPg adapter
+DATABASE
+7.1
+Open packages/db/src/index.ts
+7.2
+Import PrismaPg from @prisma/adapter-pg
+7.3
+Create the adapter using DATABASE_URL from env
+7.4
+Create a PrismaClient singleton using the globalForPrisma pattern with the adapter
+7.5
+Enable query logging in development mode only
+7.6
+Confirm the export includes db and all types re-exported from @prisma/client
+
+
+STEP
+08
+Health Check Endpoint
+Add an endpoint that verifies the DB connection in the server
+VERIFICATION
+8.1
+Open apps/server/src/index.ts
+8.2
+Import db from @focusUp/db
+8.3
+Add a GET /health endpoint that runs db.$queryRaw`SELECT 1`
+8.4
+On success: return JSON {"status":"ok","db":"connected"}
+8.5
+On failure: return 500 JSON {"status":"error","db":"disconnected"}
+8.6
+Run bun run dev and open localhost:3000/health in the browser
+8.7
+Confirm the response returns status ok
+
+
+STEP
+09
+LiveKit Cloud Setup
+Create a LiveKit Cloud account and store the credentials
+LIVEKIT
+9.1
+Go to livekit.io and create a new account
+9.2
+Create a new project named focusup-dev
+9.3
+Copy the API Key, API Secret, and WebSocket URL
+9.4
+Add them to apps/server/.env (LIVEKIT_API_KEY, LIVEKIT_API_SECRET, LIVEKIT_WS_URL)
+9.5
+Add the WebSocket URL to apps/web/.env (NEXT_PUBLIC_LIVEKIT_URL)
+
+
+STEP
+10
+Update turbo.json — globalEnv
+Add all new env variables to globalEnv so Turborepo is aware of them
+CONFIGURATION
+10.1
+Open turbo.json in the root
+10.2
+Add a globalEnv array with all env variables (DATABASE_URL, REDIS_URL, JWT_SECRET, LIVEKIT_*, NEXT_PUBLIC_*, ...)
+10.3
+Confirm NEXT_PUBLIC_SERVER_URL and NEXT_PUBLIC_LIVEKIT_URL are included
+10.4
+Run bun run dev from the root and confirm all apps start together without errors
+
+
+
+Phase 0 — Done Checklist
+
+✓  Go through every checkpoint and mark it done before moving on to Phase 1.
+
+
+#
+Checkpoint
+Status
+1
+bun install completes without errors from the root
+☐
+2
+bun run dev starts server on :3000 and web on :3001
+☐
+3
+docker compose up -d → all 3 services (Postgres, Redis, MinIO) show status: running
+☐
+4
+localhost:9001 → MinIO Console loads successfully
+☐
+5
+apps/server/.env contains all 14 required variables
+☐
+6
+apps/web/.env contains NEXT_PUBLIC_SERVER_URL and NEXT_PUBLIC_LIVEKIT_URL
+☐
+7
+.env is listed in .gitignore
+☐
+8
+packages/env schema includes all new variables and passes validation
+☐
+9
+packages/db/prisma/schema.prisma contains all 5 models and 5 enums
+☐
+10
+prisma migrate dev succeeded with name init_focusup_schema
+☐
+11
+prisma studio runs and displays all tables
+☐
+12
+packages/db/src/index.ts exports a PrismaPg singleton
+☐
+13
+localhost:3000/health returns {"status":"ok","db":"connected"}
+☐
+14
+LiveKit credentials are stored in .env
+☐
+15
+turbo.json contains the globalEnv array
+☐
+16
+bun run dev from the root starts all apps without errors
+☐
+
+
+
+What's Next — Phase 1
+
+Once the Phase 0 checklist is 100% complete, Phase 1 builds directly on top of this foundation:
+
+Phase 1 Task
+Description
+Auth Module
+Register / Login / JWT middleware on the Express server
+Onboarding Flow
+3-step wizard on the web (timezone, categories, preferred length)
+Cal.com Self-host
+Docker service + webhook endpoint on the Express server
+Session Booking Flow
+Cal.com embed at /schedule + webhook handler
+LiveKit Session Room
+/session/[id] page + video UI + goal modal + timer
+Reflection Modal
+Post-session form → save to DB
+Basic Dashboard
+Upcoming sessions + history + weekly stats
+
+
+Document Version 1.0  ·  Phase 0  ·  April 2026  ·  FocusUP Clone MVP
+

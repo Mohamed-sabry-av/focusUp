@@ -4,7 +4,7 @@ interface CreateContextOptions {
   req: Request;
 }
 
-export async function createContext(opts: CreateContextOptions) {
+export async function createContext(_opts: CreateContextOptions) {
   return {
     auth: null,
     session: null,

@@ -1,0 +1,147 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ENUMS
+
+enum SessionStatus {
+  PENDING
+  CONFIRMED
+  ACTIVE
+  COMPLETED
+  CANCELLED
+  NO_SHOW
+}
+
+enum PlanTier {
+  FREE
+  PRO
+  TEAM
+}
+
+enum Category {
+  CODING
+  WRITING
+  STUDYING
+  DESIGN
+  ADMIN
+  OTHER
+}
+
+enum ReportReason {
+  NO_SHOW
+  INAPPROPRIATE
+  HARASSMENT
+  SPAM
+  OTHER
+}
+
+enum ReportStatus {
+  OPEN
+  REVIEWED
+  RESOLVED
+  DISMISSED
+}
+
+// MODELS
+
+model User {
+  id               String       @id @default(cuid())
+  email            String       @unique
+  passwordHash     String?
+  displayName      String
+  username         String       @unique
+  avatarUrl        String?
+  timezone         String       @default("UTC")
+  categories       Category[]
+  preferredLength  Int[]        @default([25, 50])
+  calcomUserId     String?      @unique
+  calcomUsername   String?
+  stripeCustomerId String?
+  planTier         PlanTier     @default(FREE)
+  strikeCount      Int          @default(0)
+  isActive         Boolean      @default(true)
+  isBanned         Boolean      @default(false)
+  emailVerified    Boolean      @default(false)
+  isAdmin          Boolean      @default(false)
+  createdAt        DateTime     @default(now())
+  updatedAt        DateTime     @updatedAt
+
+  sessionsAsUser1  Session[]    @relation("User1Sessions")
+  sessionsAsUser2  Session[]    @relation("User2Sessions")
+  reflections      Reflection[]
+  reportsGiven     Report[]     @relation("Reporter")
+  reportsReceived  Report[]     @relation("Reported")
+  blocks           Block[]      @relation("Blocker")
+  blockedBy        Block[]      @relation("Blocked")
+}
+
+model Session {
+  id              String        @id @default(cuid())
+  user1Id         String
+  user2Id         String?
+  durationMin     Int
+  status          SessionStatus @default(PENDING)
+  scheduledAt     DateTime
+  startedAt       DateTime?
+  endedAt         DateTime?
+  calcomBookingId String?       @unique
+  livekitRoomName String        @unique
+  category        Category?
+  user1Goal       String?
+  user2Goal       String?
+  createdAt       DateTime      @default(now())
+
+  user1           User          @relation("User1Sessions", fields: [user1Id], references: [id])
+  user2           User?         @relation("User2Sessions", fields: [user2Id], references: [id])
+  reflections     Reflection[]
+  reports         Report[]
+
+  @@index([status])
+  @@index([scheduledAt])
+  @@index([user1Id])
+  @@index([user2Id])
+}
+
+model Reflection {
+  id        String   @id @default(cuid())
+  sessionId String
+  userId    String
+  text      String
+  rating    Int?
+  createdAt DateTime @default(now())
+
+  session   Session  @relation(fields: [sessionId], references: [id])
+  user      User     @relation(fields: [userId], references: [id])
+}
+
+model Report {
+  id          String       @id @default(cuid())
+  reporterId  String
+  reportedId  String
+  sessionId   String?
+  reason      ReportReason
+  description String?
+  status      ReportStatus @default(OPEN)
+  createdAt   DateTime     @default(now())
+
+  reporter    User         @relation("Reporter", fields: [reporterId], references: [id])
+  reported    User         @relation("Reported", fields: [reportedId], references: [id])
+  session     Session?     @relation(fields: [sessionId], references: [id])
+}
+
+model Block {
+  id        String   @id @default(cuid())
+  blockerId String
+  blockedId String
+  createdAt DateTime @default(now())
+
+  blocker   User     @relation("Blocker", fields: [blockerId], references: [id])
+  blocked   User     @relation("Blocked", fields: [blockedId], references: [id])
+
+  @@unique([blockerId, blockedId])
+}

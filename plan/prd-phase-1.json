@@ -1,0 +1,611 @@
+{
+  "phase": "Phase 1 — Core Loop",
+  "description": "User registration, onboarding, Cal.com booking, LiveKit sessions, reflections, and dashboard. This is the end-to-end core product loop.",
+  "estimated_iterations": "25-35",
+  "run_mode": "Start HITL for items P1-01 through P1-06 (auth foundation). Switch to AFK for P1-07 onward.",
+  "items": [
+
+    {
+      "id": "P1-01",
+      "category": "architecture",
+      "priority": 1,
+      "title": "Prisma Schema — Full Data Models",
+      "description": "Create the complete Prisma schema with all models: User, Session, Reflection, Report, Block. Include all enums: SessionStatus, PlanTier, Category, ReportReason, ReportStatus. Add all required indexes. Run prisma migrate dev to generate migration.",
+      "steps": [
+        "Schema file exists at apps/api/prisma/schema.prisma",
+        "All 5 models defined with correct fields and relations",
+        "All 5 enums defined",
+        "Indexes exist on: sessions.status, sessions.scheduledAt, sessions.user1Id, sessions.user2Id",
+        "prisma migrate dev runs successfully",
+        "prisma generate produces client without errors",
+        "npm run typecheck passes in apps/api"
+      ],
+      "notes": "Reference the Prisma schema in the master build prompt exactly. Do NOT deviate from the field names or types specified.",
+      "passes": false
+    },
+
+    {
+      "id": "P1-02",
+      "category": "architecture",
+      "priority": 1,
+      "title": "Express App Structure — Base Middleware & Error Handling",
+      "description": "Set up the Express application with proper middleware stack: CORS, helmet, cookie-parser, JSON body parser, rate limiter (express-rate-limit), and a global error handler. Create the router structure with domain-grouped route files. Create a structured error class and error response format.",
+      "steps": [
+        "apps/api/src/app.ts exports configured Express app",
+        "Middleware applied: cors, helmet, cookie-parser, express.json, rate-limiter",
+        "Global error handler catches all errors and returns { error, statusCode }",
+        "AppError class exists with statusCode, message, and optional details",
+        "Route files exist (empty is fine): auth.routes.ts, users.routes.ts, sessions.routes.ts, matching.routes.ts, notifications.routes.ts, webhooks.routes.ts",
+        "All routes mounted under /api prefix",
+        "Health check endpoint GET /api/health returns { status: 'ok' }",
+        "Rate limiter on /api/auth/* endpoints: 5 req/min",
+        "npm run typecheck passes",
+        "npm run lint passes"
+      ],
+      "passes": false
+    },
+
+    {
+      "id": "P1-03",
+      "category": "architecture",
+      "priority": 1,
+      "title": "Shared Types Package — DTOs & Zod Schemas",
+      "description": "Create the packages/shared-types package with Zod schemas and TypeScript types for all API request/response payloads. These will be imported by both apps/api and apps/web.",
+      "steps": [
+        "packages/shared-types/package.json exists with correct name",
+        "Zod schemas exist for: RegisterInput, LoginInput, OnboardingInput, CreateSessionInput, CreateReflectionInput, CreateReportInput, CreateBlockInput",
+        "TypeScript types exported via z.infer for each schema",
+        "Enum types exported matching Prisma enums: SessionStatus, PlanTier, Category, ReportReason, ReportStatus",
+        "API response wrapper types: ApiResponse<T>, ApiError, PaginatedResponse<T>",
+        "Package builds successfully",
+        "Can be imported from apps/api and apps/web without errors",
+        "npm run typecheck passes in all workspaces"
+      ],
+      "passes": false
+    },
+
+    {
+      "id": "P1-04",
+      "category": "functional",
+      "priority": 1,
+      "title": "Auth — Registration Endpoint (Email/Password)",
+      "description": "Implement POST /api/auth/register. Hash password with bcrypt (12 rounds). Create User record. Generate JWT access token (15min) and refresh token (7d). Set tokens in httpOnly cookies. Return user profile (no password hash).",
+      "steps": [
+        "POST /api/auth/register accepts { email, password, displayName, username }",
+        "Request validated with Zod RegisterInput schema",
+        "Duplicate email returns 409 with clear error message",
+        "Duplicate username returns 409 with clear error message",
+        "Password hashed with bcrypt, rounds = 12",
+        "User created in database with all required defaults",
+        "JWT access token (15min expiry) set in httpOnly cookie named 'access_token'",
+        "JWT refresh token (7d expiry) set in httpOnly cookie named 'refresh_token'",
+        "Response body contains user object WITHOUT passwordHash",
+        "Unit test: successful registration creates user and returns tokens",
+        "Unit test: duplicate email returns 409",
+        "Unit test: weak password validation (min 8 chars)",
+        "npm run test passes",
+        "npm run typecheck passes"
+      ],
+      "passes": false
+    },
+
+    {
+      "id": "P1-05",
+      "category": "functional",
+      "priority": 1,
+      "title": "Auth — Login, Logout, Refresh Token Endpoints",
+      "description": "Implement POST /api/auth/login, POST /api/auth/logout, and POST /api/auth/refresh. Login validates credentials, issues tokens. Logout clears cookies. Refresh issues new access token from valid refresh token.",
+      "steps": [
+        "POST /api/auth/login accepts { email, password }",
+        "Invalid credentials return 401 (generic message — don't reveal which field is wrong)",
+        "Successful login sets access_token and refresh_token httpOnly cookies",
+        "POST /api/auth/logout clears both token cookies",
+        "POST /api/auth/refresh reads refresh_token cookie, validates, issues new access_token",
+        "Expired refresh token returns 401",
+        "Unit test: successful login",
+        "Unit test: wrong password returns 401",
+        "Unit test: refresh token rotation works",
+        "Unit test: logout clears cookies",
+        "npm run test passes"
+      ],
+      "passes": false
+    },
+
+    {
+      "id": "P1-06",
+      "category": "functional",
+      "priority": 1,
+      "title": "Auth — JWT Middleware & Protected Routes",
+      "description": "Create an auth middleware that extracts JWT from httpOnly cookie, verifies it, and attaches the user to the request object. Create a requireAuth middleware that returns 401 if not authenticated. Apply to all routes except auth and webhooks.",
+      "steps": [
+        "authMiddleware extracts access_token from cookies, verifies JWT, attaches req.user",
+        "req.user contains: id, email, username, planTier, isActive, isBanned",
+        "requireAuth middleware returns 401 if req.user is not set",
+        "Banned users get 403 with message 'Account suspended'",
+        "Inactive users get 403 with message 'Account deactivated'",
+        "Middleware applied to all /api/* routes except /api/auth/* and /api/webhooks/*",
+        "Unit test: valid token passes through middleware",
+        "Unit test: expired token returns 401",
+        "Unit test: missing token returns 401",
+        "Unit test: banned user returns 403",
+        "npm run test passes"
+      ],
+      "passes": false
+    },
+
+    {
+      "id": "P1-07",
+      "category": "functional",
+      "priority": 2,
+      "title": "Auth — Google OAuth Flow",
+      "description": "Implement Google OAuth login/register using Better Auth or Passport.js Google strategy. On first OAuth login, create a User record (generate username from email prefix). On subsequent logins, find existing user by email. Issue JWT tokens same as email/password flow.",
+      "steps": [
+        "GET /api/auth/google redirects to Google OAuth consent screen",
+        "GET /api/auth/google/callback handles OAuth callback",
+        "New Google users get a User record created (passwordHash = null)",
+        "Username auto-generated from email prefix (e.g., john.doe@gmail.com → john-doe)",
+        "Username collision appends random 4-digit suffix",
+        "Existing users by email are logged in (not duplicated)",
+        "JWT tokens set in httpOnly cookies after OAuth success",
+        "Redirect to /dashboard after successful auth",
+        "npm run typecheck passes"
+      ],
+      "passes": false
+    },
+
+    {
+      "id": "P1-08",
+      "category": "functional",
+      "priority": 2,
+      "title": "Auth — Email Verification",
+      "description": "After registration, send a verification email with a signed token link. Users must verify email before booking their first session. Add emailVerified boolean to User model.",
+      "steps": [
+        "User model has emailVerified: Boolean @default(false) field (add via new migration)",
+        "POST /api/auth/register sends verification email via Resend SDK",
+        "Email contains link: /verify-email?token=<signed-jwt>",
+        "GET /api/auth/verify-email?token=<token> sets emailVerified = true",
+        "Token expires in 24 hours",
+        "Expired token returns 400 with 'Verification link expired'",
+        "POST /api/auth/resend-verification sends a new email (rate limited: 1/min)",
+        "Session booking endpoint checks emailVerified — returns 403 if false",
+        "Unit test: verification flow end-to-end",
+        "npm run test passes"
+      ],
+      "passes": false
+    },
+
+    {
+      "id": "P1-09",
+      "category": "frontend",
+      "priority": 2,
+      "title": "Auth Pages — Login & Register UI",
+      "description": "Build the login and register pages using Next.js App Router at /login and /register. Use shadcn/ui form components. Include Google OAuth button. Handle validation errors inline. Redirect to /onboarding on first register, /dashboard on login.",
+      "steps": [
+        "Page exists at apps/web/app/(auth)/login/page.tsx",
+        "Page exists at apps/web/app/(auth)/register/page.tsx",
+        "Both pages use shadcn/ui Card, Input, Button, Label components",
+        "Client-side validation with Zod schemas from packages/shared-types",
+        "Server errors displayed inline (e.g., 'Email already taken')",
+        "Google OAuth button present on both pages",
+        "Register success redirects to /onboarding",
+        "Login success redirects to /dashboard",
+        "Loading states on submit buttons",
+        "Pages are responsive (mobile-first)",
+        "npm run typecheck passes in apps/web",
+        "npm run lint passes"
+      ],
+      "passes": false
+    },
+
+    {
+      "id": "P1-10",
+      "category": "functional",
+      "priority": 2,
+      "title": "Onboarding Wizard — API & UI",
+      "description": "Build a 3-step onboarding wizard at /onboarding. Step 1: Select timezone (auto-detect + dropdown). Step 2: Choose work categories (multi-select from Category enum). Step 3: Preferred session lengths (25/50/75 min checkboxes). Save via PATCH /api/users/me/onboarding. Redirect to /dashboard on completion.",
+      "steps": [
+        "PATCH /api/users/me/onboarding accepts { timezone, categories, preferredLength }",
+        "Validated with Zod OnboardingInput schema",
+        "Updates User record in database",
+        "Onboarding page exists at apps/web/app/(auth)/onboarding/page.tsx",
+        "3-step wizard with progress indicator (Step 1 of 3, Step 2 of 3, etc.)",
+        "Step 1: Timezone auto-detected via Intl.DateTimeFormat, with dropdown override",
+        "Step 2: Category multi-select with checkboxes for each Category enum value",
+        "Step 3: Session length checkboxes (25, 50, 75 min)",
+        "Back/Next navigation between steps",
+        "Final step: 'Get Started' button saves all data and redirects to /dashboard",
+        "React Query mutation for the PATCH request",
+        "npm run typecheck passes"
+      ],
+      "passes": false
+    },
+
+    {
+      "id": "P1-11",
+      "category": "architecture",
+      "priority": 2,
+      "title": "Cal.com User Provisioning on Registration",
+      "description": "When a new user registers, automatically create a Cal.com user account via Cal.com's API. Store calcomUserId and calcomUsername on our User model. Create default event types (25min, 50min, 75min focus sessions) for the Cal.com user.",
+      "steps": [
+        "Service function createCalcomUser(user) calls Cal.com Admin API to create user",
+        "Cal.com user created with matching email and display name",
+        "calcomUserId and calcomUsername stored on our User record",
+        "Three event types created for the Cal.com user: 25min, 50min, 75min",
+        "Event types titled: '25 Min Focus Session', '50 Min Focus Session', '75 Min Focus Session'",
+        "If Cal.com user creation fails, our user is still created (graceful degradation)",
+        "Error logged but not thrown to the user",
+        "Unit test: Cal.com provisioning called on registration",
+        "npm run test passes"
+      ],
+      "notes": "Cal.com API may require admin-level API key. Store as CALCOM_API_KEY env variable. This is the ONE place we call Cal.com API directly — everything else is webhooks.",
+      "passes": false
+    },
+
+    {
+      "id": "P1-12",
+      "category": "integration",
+      "priority": 1,
+      "title": "Cal.com Webhook — Signature Verification & Routing",
+      "description": "Implement POST /api/webhooks/calcom endpoint. Verify X-Cal-Signature-256 HMAC signature. Route to appropriate handler based on triggerEvent: BOOKING_CREATED, BOOKING_CANCELLED, BOOKING_RESCHEDULED.",
+      "steps": [
+        "POST /api/webhooks/calcom endpoint exists",
+        "Endpoint is NOT behind JWT auth middleware (it uses webhook signature instead)",
+        "X-Cal-Signature-256 header verified using HMAC-SHA256 with CALCOM_WEBHOOK_SECRET",
+        "Invalid signature returns 401",
+        "Missing signature returns 401",
+        "Payload parsed and routed by triggerEvent field",
+        "Unknown triggerEvent returns 400",
+        "Unit test: valid signature passes",
+        "Unit test: invalid signature returns 401",
+        "Unit test: routing to correct handler by event type",
+        "npm run test passes"
+      ],
+      "passes": false
+    },
+
+    {
+      "id": "P1-13",
+      "category": "functional",
+      "priority": 1,
+      "title": "Cal.com Webhook — BOOKING_CREATED Handler",
+      "description": "When Cal.com fires BOOKING_CREATED, create a Session record in our database. Look up both users (organizer + attendee) by email. Set session status to CONFIRMED. Generate a unique livekitRoomName (= session.id). Trigger notification to both users.",
+      "steps": [
+        "BOOKING_CREATED webhook creates a Session record",
+        "Organizer looked up by email → user1Id",
+        "First attendee looked up by email → user2Id",
+        "If attendee email not found in our system, session created with user2Id = null",
+        "Session fields: durationMin from payload, scheduledAt from startTime, status = CONFIRMED",
+        "calcomBookingId set from payload.uid for idempotency",
+        "livekitRoomName = session.id (cuid)",
+        "Duplicate calcomBookingId is rejected (idempotency check)",
+        "category parsed from payload.metadata.focusCategory if present",
+        "Unit test: successful session creation from webhook",
+        "Unit test: idempotency — duplicate booking ID rejected gracefully",
+        "Unit test: unknown attendee email creates session with null user2",
+        "npm run test passes"
+      ],
+      "passes": false
+    },
+
+    {
+      "id": "P1-14",
+      "category": "functional",
+      "priority": 2,
+      "title": "Cal.com Webhook — BOOKING_CANCELLED & BOOKING_RESCHEDULED Handlers",
+      "description": "Handle cancellation and rescheduling webhooks. CANCELLED sets session status to CANCELLED. RESCHEDULED updates scheduledAt and creates audit trail.",
+      "steps": [
+        "BOOKING_CANCELLED: find session by calcomBookingId, set status to CANCELLED",
+        "If session is already ACTIVE or COMPLETED, do not cancel (return 409)",
+        "BOOKING_RESCHEDULED: find session by calcomBookingId, update scheduledAt",
+        "If rescheduled session is within 1 hour of original, update in place",
+        "Notification sent to both users on cancel and reschedule",
+        "Unit test: cancel sets CANCELLED status",
+        "Unit test: cancel on ACTIVE session returns 409",
+        "Unit test: reschedule updates scheduledAt",
+        "npm run test passes"
+      ],
+      "passes": false
+    },
+
+    {
+      "id": "P1-15",
+      "category": "frontend",
+      "priority": 2,
+      "title": "Schedule Page — Cal.com Embed",
+      "description": "Build the /schedule page that embeds the user's Cal.com booking page using @calcom/embed-react. User can book sessions with any available partner or share their link.",
+      "steps": [
+        "Page exists at apps/web/app/schedule/page.tsx",
+        "Page is protected (redirects to /login if not authenticated)",
+        "@calcom/embed-react installed and configured",
+        "Cal.com embed loads the current user's booking page",
+        "Embed styled to match app theme (TailwindCSS)",
+        "User's shareable Cal.com link displayed with copy button",
+        "Loading skeleton while embed initializes",
+        "Error state if Cal.com embed fails to load",
+        "npm run typecheck passes",
+        "npm run lint passes"
+      ],
+      "passes": false
+    },
+
+    {
+      "id": "P1-16",
+      "category": "integration",
+      "priority": 1,
+      "title": "LiveKit Token Generation Endpoint",
+      "description": "Implement GET /api/sessions/:sessionId/token. Verify the requesting user is a participant of the session. Generate a LiveKit access token with room join grant. Return the token.",
+      "steps": [
+        "GET /api/sessions/:sessionId/token endpoint exists",
+        "Endpoint is behind JWT auth middleware",
+        "Returns 404 if session not found",
+        "Returns 403 if requesting user is not user1 or user2 of the session",
+        "Returns 403 if session status is not CONFIRMED or ACTIVE",
+        "Token generated using @livekit/server-sdk AccessToken",
+        "Token identity = userId, name = displayName",
+        "Token grants: roomJoin=true, room=sessionId, canPublish=true, canSubscribe=true, canPublishData=true",
+        "Token TTL = 2 hours",
+        "Response: { token: string }",
+        "LIVEKIT_API_KEY and LIVEKIT_API_SECRET read from environment",
+        "Unit test: valid participant gets token",
+        "Unit test: non-participant gets 403",
+        "Unit test: wrong session status gets 403",
+        "npm run test passes"
+      ],
+      "passes": false
+    },
+
+    {
+      "id": "P1-17",
+      "category": "frontend",
+      "priority": 1,
+      "title": "Session Room — Page Shell & LiveKit Connection",
+      "description": "Build the session room page at /session/[sessionId]. Fetch LiveKit token from API. Connect to LiveKit room using @livekit/components-react. Display partner video (main) and self video (bottom-right PiP). Include mute, camera toggle, and leave buttons.",
+      "steps": [
+        "Page exists at apps/web/app/session/[id]/page.tsx",
+        "Page is protected — redirects to /login if not authenticated",
+        "React Query fetches token from GET /api/sessions/:id/token",
+        "Loading state shown while token is fetched",
+        "Error state if token fetch fails (403 → 'You are not a participant')",
+        "<LiveKitRoom> component connects with serverUrl and token",
+        "RoomOptions match the spec: adaptiveStream=true, dynacast=true, h540, vp9, dtx=true",
+        "Partner video displayed as main tile (large)",
+        "Self video displayed as bottom-right picture-in-picture (small)",
+        "Control bar: mute mic button, toggle camera button, leave session button",
+        "onDisconnected callback triggers session end handling",
+        "npm run typecheck passes",
+        "npm run lint passes"
+      ],
+      "passes": false
+    },
+
+    {
+      "id": "P1-18",
+      "category": "frontend",
+      "priority": 2,
+      "title": "Session Room — Goal Setting Modal",
+      "description": "When the session room loads and both participants are connected, show a Goal Setting modal. User types their goal for this session. Modal auto-dismisses after 15 seconds if not submitted. Goal saved to Session record (user1Goal or user2Goal).",
+      "steps": [
+        "Modal appears when user enters the session room",
+        "Modal contains: text input for goal, 'Set Goal' submit button",
+        "15-second countdown timer displayed on modal",
+        "If timer reaches 0, modal auto-dismisses without saving",
+        "On submit: PATCH /api/sessions/:id/goal with { goal: string }",
+        "API updates user1Goal or user2Goal based on requesting user",
+        "Goal displayed in session UI after modal closes (small banner)",
+        "Partner's goal also displayed once they submit theirs (via WebSocket or polling)",
+        "React Query mutation for goal save",
+        "npm run typecheck passes"
+      ],
+      "passes": false
+    },
+
+    {
+      "id": "P1-19",
+      "category": "frontend",
+      "priority": 2,
+      "title": "Session Room — Countdown Timer & 5-Min Warning",
+      "description": "Display a countdown timer based on the session's durationMin. Timer starts when session status becomes ACTIVE (both users joined). At 5 minutes remaining, show a toast notification. When timer reaches 0, trigger session end flow.",
+      "steps": [
+        "Timer component displays MM:SS countdown",
+        "Timer value calculated from session.durationMin and session.startedAt",
+        "Timer starts counting when session status = ACTIVE",
+        "At 5:00 remaining: toast notification ('5 minutes remaining')",
+        "At 1:00 remaining: toast notification ('1 minute remaining')",
+        "At 0:00: trigger session end flow (reflection modal)",
+        "Timer persists across page refresh (calculated from server time, not local)",
+        "Timer styled prominently in session UI (top center)",
+        "npm run typecheck passes"
+      ],
+      "passes": false
+    },
+
+    {
+      "id": "P1-20",
+      "category": "functional",
+      "priority": 2,
+      "title": "Session Status Management — ACTIVE & COMPLETED API",
+      "description": "Implement session status transitions on the backend. PATCH /api/sessions/:id/join marks a participant as joined. When both participants have joined, status → ACTIVE, startedAt set. PATCH /api/sessions/:id/complete sets status → COMPLETED, endedAt set.",
+      "steps": [
+        "PATCH /api/sessions/:id/join — marks calling user as joined",
+        "Joining tracked via a joinedUsers JSON field or separate tracking (Redis or DB)",
+        "When both user1 and user2 have called /join, status → ACTIVE, startedAt = now()",
+        "If session is not CONFIRMED, /join returns 400",
+        "PATCH /api/sessions/:id/complete — sets status → COMPLETED, endedAt = now()",
+        "Only ACTIVE sessions can be completed",
+        "Both endpoints verify requesting user is a participant",
+        "Unit test: first join doesn't change status",
+        "Unit test: second join sets ACTIVE",
+        "Unit test: complete sets COMPLETED with endedAt",
+        "npm run test passes"
+      ],
+      "passes": false
+    },
+
+    {
+      "id": "P1-21",
+      "category": "frontend",
+      "priority": 2,
+      "title": "Session Room — Reflection Modal",
+      "description": "When the session ends (timer = 0 or manual end), show a Reflection modal. User writes a text reflection and optionally rates the session (1–5 stars). Saved via POST /api/reflections.",
+      "steps": [
+        "Modal appears when session status → COMPLETED",
+        "Modal contains: textarea for reflection text, 1–5 star rating (optional), 'Save' button",
+        "POST /api/reflections accepts { sessionId, text, rating }",
+        "Validated with Zod CreateReflectionInput schema",
+        "Reflection created in database linked to session and user",
+        "After save: redirect to /dashboard with success toast",
+        "'Skip' button allows dismissing without saving",
+        "React Query mutation for reflection save",
+        "Unit test (API): reflection created successfully",
+        "Unit test (API): reflection requires valid sessionId",
+        "npm run test passes",
+        "npm run typecheck passes"
+      ],
+      "passes": false
+    },
+
+    {
+      "id": "P1-22",
+      "category": "frontend",
+      "priority": 2,
+      "title": "Dashboard — Layout Shell & Navigation",
+      "description": "Build the main dashboard layout at /dashboard. Include sidebar navigation (Dashboard, Schedule, Settings), top bar with user avatar + name, and main content area. This is the app shell that all authenticated pages live inside.",
+      "steps": [
+        "Layout exists at apps/web/app/dashboard/layout.tsx",
+        "Sidebar with navigation links: Dashboard (home), Schedule, Settings",
+        "Top bar with: user display name, avatar, dropdown menu (Profile, Settings, Logout)",
+        "Logout button calls POST /api/auth/logout and redirects to /login",
+        "Sidebar is collapsible on mobile (hamburger menu)",
+        "Active nav link highlighted",
+        "Main content area renders child routes",
+        "Uses shadcn/ui Sidebar, Avatar, DropdownMenu components",
+        "Responsive: sidebar becomes bottom nav or drawer on mobile",
+        "npm run typecheck passes",
+        "npm run lint passes"
+      ],
+      "passes": false
+    },
+
+    {
+      "id": "P1-23",
+      "category": "functional",
+      "priority": 2,
+      "title": "Dashboard — Sessions API (List Upcoming & History)",
+      "description": "Implement GET /api/sessions/upcoming (next 7 days) and GET /api/sessions/history (past sessions, paginated). Both filtered to the authenticated user's sessions only.",
+      "steps": [
+        "GET /api/sessions/upcoming returns sessions where scheduledAt > now AND scheduledAt < now+7d",
+        "Filtered to sessions where user is user1 or user2",
+        "Ordered by scheduledAt ASC (nearest first)",
+        "Includes partner info (displayName, avatarUrl, username) via join",
+        "GET /api/sessions/history returns completed/cancelled/no-show sessions",
+        "Paginated with ?page=1&limit=10, returns { data, total, page, totalPages }",
+        "Ordered by scheduledAt DESC (most recent first)",
+        "Includes reflection snippet (first 100 chars) if exists",
+        "Both endpoints use Prisma select to avoid over-fetching",
+        "Unit test: upcoming returns only future sessions",
+        "Unit test: history is paginated correctly",
+        "Unit test: only returns sessions where user is participant",
+        "npm run test passes"
+      ],
+      "passes": false
+    },
+
+    {
+      "id": "P1-24",
+      "category": "frontend",
+      "priority": 2,
+      "title": "Dashboard — Upcoming Sessions & Session Cards",
+      "description": "Display upcoming sessions on the dashboard home page. Each session shown as a card with: partner name/avatar, scheduled time, duration, category, status badge, and a 'Join Session' button (active only within 5 min of start time).",
+      "steps": [
+        "Dashboard page at apps/web/app/dashboard/page.tsx",
+        "React Query hook: useUpcomingSessions() fetches GET /api/sessions/upcoming",
+        "Session card component with: partner avatar, partner name, date/time, duration badge, category tag",
+        "Status badge: color-coded by SessionStatus (CONFIRMED=blue, ACTIVE=green, PENDING=yellow)",
+        "'Join Session' button links to /session/[id]",
+        "Button disabled if session is more than 5 minutes away",
+        "Button shows countdown: 'Starts in 2h 15m' → 'Starts in 3m' → 'Join Now'",
+        "Empty state: 'No upcoming sessions. Book one!' with CTA link to /schedule",
+        "Loading skeletons while data fetches",
+        "npm run typecheck passes"
+      ],
+      "passes": false
+    },
+
+    {
+      "id": "P1-25",
+      "category": "frontend",
+      "priority": 3,
+      "title": "Dashboard — Session History & Reflections",
+      "description": "Display session history on the dashboard. Paginated list of past sessions with status, partner info, and reflection snippets. Click to expand full reflection.",
+      "steps": [
+        "History section on dashboard page (below upcoming sessions, or separate tab)",
+        "React Query hook: useSessionHistory(page) fetches GET /api/sessions/history",
+        "Each history item shows: date, partner name, duration, status badge, reflection snippet",
+        "Click on item expands to show full reflection text and star rating",
+        "Pagination controls (Previous / Next) at bottom",
+        "Empty state: 'No sessions yet. Start your first focus session!'",
+        "Loading skeletons while data fetches",
+        "npm run typecheck passes"
+      ],
+      "passes": false
+    },
+
+    {
+      "id": "P1-26",
+      "category": "frontend",
+      "priority": 3,
+      "title": "Dashboard — Weekly Stats Display",
+      "description": "Show weekly productivity stats on the dashboard: sessions completed this week, total focus hours this week, current streak (consecutive days with at least 1 session).",
+      "steps": [
+        "GET /api/users/me/stats endpoint returns { sessionsThisWeek, focusHoursThisWeek, currentStreak }",
+        "sessionsThisWeek: count of COMPLETED sessions in current ISO week",
+        "focusHoursThisWeek: sum of durationMin for COMPLETED sessions in current week / 60",
+        "currentStreak: consecutive calendar days with at least 1 COMPLETED session (going backward from today)",
+        "Dashboard displays 3 stat cards: Sessions (count), Focus Hours (hours), Streak (days)",
+        "Each card has an icon, large number, and label",
+        "Uses shadcn/ui Card component",
+        "React Query hook: useUserStats() fetches GET /api/users/me/stats",
+        "npm run typecheck passes",
+        "npm run test passes (API)"
+      ],
+      "passes": false
+    },
+
+    {
+      "id": "P1-27",
+      "category": "frontend",
+      "priority": 3,
+      "title": "Dashboard — Free Tier Usage Indicator",
+      "description": "For FREE tier users, display a usage indicator showing sessions used this week out of 3. Example: '2 / 3 sessions used this week'. If at limit, show upgrade prompt.",
+      "steps": [
+        "GET /api/users/me/stats also returns { sessionsUsedThisWeek, sessionLimit } for FREE tier",
+        "Dashboard shows progress bar or pill: 'X / 3 sessions this week'",
+        "When 3/3 used: bar turns red, 'Upgrade to Pro for unlimited sessions' CTA shown",
+        "PRO tier users see no usage indicator (or 'Unlimited' badge)",
+        "Upgrade CTA links to /settings (subscription section — placeholder for Phase 4)",
+        "npm run typecheck passes"
+      ],
+      "passes": false
+    },
+
+    {
+      "id": "P1-28",
+      "category": "functional",
+      "priority": 3,
+      "title": "Session Booking Confirmation Email",
+      "description": "When a session is created (from Cal.com webhook), send a booking confirmation email to both participants using Resend. Email includes: partner name, session time, duration, and a join link.",
+      "steps": [
+        "Email sent via Resend SDK (@resend/node)",
+        "Email template: 'Your focus session is confirmed'",
+        "Contains: partner display name, formatted date/time in user's timezone, duration, session join link (/session/[id])",
+        "Sent to both user1 and user2 (if user2 exists)",
+        "Email sending is async — does not block webhook response",
+        "If Resend fails, error is logged but not thrown",
+        "RESEND_API_KEY read from environment",
+        "Unit test: email function called with correct parameters",
+        "npm run test passes"
+      ],
+      "passes": false
+    }
+  ]
+}

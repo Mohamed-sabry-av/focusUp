@@ -1,0 +1,871 @@
+
+FocusUP Clone
+Master Build Prompt  ·  v1.0
+─────────────────────────────────────────
+Product Documentation  ·  MVP Edition
+Cal.com Scheduling  ·  LiveKit Video  ·  Express + Next.js
+April 2026
+Version 1.0  ·  MVP Build
+
+Table of Contents
+
+Table of Contents.............................................................................................................. 1
+1.  Role & Mission............................................................................................................. 1
+Product Role................................................................................................................. 1
+Mission Statement........................................................................................................ 1
+Core Value Proposition.................................................................................................. 1
+Design Principles........................................................................................................... 1
+2.  Strategic Context.......................................................................................................... 1
+Market Landscape......................................................................................................... 1
+Target User Personas..................................................................................................... 1
+Persona A — "The Remote Freelancer"....................................................................... 1
+Persona B — "The Procrastinating Student"................................................................ 1
+Persona C — "The Deep Work Founder"..................................................................... 1
+Business Model — MVP................................................................................................. 1
+Key Differentiators........................................................................................................ 1
+3.  Architecture Blueprint.................................................................................................. 1
+High-Level System Architecture...................................................................................... 1
+Tech Stack Decisions...................................................................................................... 1
+Frontend................................................................................................................... 1
+Backend.................................................................................................................... 1
+Infrastructure............................................................................................................ 1
+Repository Structure (Monorepo — Turborepo).............................................................. 1
+4.  Core Feature Requirements.......................................................................................... 1
+F-01  ·  Authentication & Onboarding............................................................................. 1
+Requirements............................................................................................................ 1
+Constraints................................................................................................................ 1
+F-02  ·  Session Booking via Cal.com................................................................................ 1
+Requirements............................................................................................................ 1
+Integration Flow........................................................................................................ 1
+Business Rules........................................................................................................... 1
+F-03  ·  Matching Engine................................................................................................. 1
+Requirements............................................................................................................ 1
+Architecture.............................................................................................................. 1
+F-04  ·  Live Session Room (LiveKit)................................................................................. 1
+Requirements............................................................................................................ 1
+LiveKit Room Config................................................................................................... 1
+Token Generation (Backend)...................................................................................... 1
+F-05  ·  Session Lifecycle Management............................................................................ 1
+Session States........................................................................................................... 1
+State Rules................................................................................................................ 1
+F-06  ·  User Dashboard.................................................................................................. 1
+F-07  ·  Notifications....................................................................................................... 1
+Channels: Email (Resend) · In-App (WebSocket) · Browser Push (Post-MVP).................. 1
+F-08  ·  Trust & Safety.................................................................................................... 1
+F-09  ·  Profile & Settings................................................................................................ 1
+Public Profile............................................................................................................. 1
+Settings..................................................................................................................... 1
+5.  Data Models................................................................................................................. 1
+Prisma Schema.............................................................................................................. 1
+6.  User Flows................................................................................................................... 1
+Flow A — Instant Match (Queue)................................................................................... 1
+Flow B — Scheduled Booking (Cal.com).......................................................................... 1
+Flow C — Direct Partner Booking.................................................................................... 1
+7.  Integration Contracts.................................................................................................... 1
+Cal.com Integration....................................................................................................... 1
+Docker Compose Setup.............................................................................................. 1
+Webhook Payload (BOOKING_CREATED)..................................................................... 1
+Webhook Handler (NestJS)......................................................................................... 1
+LiveKit Integration......................................................................................................... 1
+Environment Variables............................................................................................... 1
+Frontend Room Join.................................................................................................. 1
+Screen Share (Opt-in)................................................................................................. 1
+8.  Non-Functional Requirements....................................................................................... 1
+Performance Targets..................................................................................................... 1
+Security........................................................................................................................ 1
+Reliability...................................................................................................................... 1
+Scalability Path (Post-MVP)............................................................................................ 1
+9.  MVP Scope & Phased Roadmap..................................................................................... 1
+Phase 0 — Foundation  (Week 1–2)................................................................................ 1
+Phase 1 — Core Loop  (Week 3–5).................................................................................. 1
+Phase 2 — Matching Engine  (Week 6–7)........................................................................ 1
+Phase 3 — Trust & Polish  (Week 8–9)............................................................................ 1
+Phase 4 — Monetization  (Week 10)............................................................................... 1
+Post-MVP Backlog......................................................................................................... 1
+10.  Agent Instructions  (agent.md).................................................................................... 1
+Hard Constraints — Architecture.................................................................................... 1
+Hard Constraints — Code Style....................................................................................... 1
+Hard Constraints — Database........................................................................................ 1
+Hard Constraints — LiveKit............................................................................................ 1
+Hard Constraints — Cal.com.......................................................................................... 1
+Hard Constraints — Business Logic................................................................................. 1
+What Agents Should NOT Change................................................................................... 1
+What Agents CAN Do Autonomously.............................................................................. 1
+
+
+
+1.  Role & Mission
+
+Product Role
+A virtual co-working platform that pairs people together in live, structured focus sessions using body-doubling psychology — the proven productivity phenomenon where the mere presence of another person boosts accountability and output.
+
+Mission Statement
+"Turn solitary work into shared momentum."
+We help freelancers, students, remote workers, and entrepreneurs beat procrastination and distraction by connecting them with a real accountability partner — on demand, at any time.
+
+Core Value Proposition
+For
+Who
+We Provide
+Unlike
+Remote workers & students
+Struggling with focus & procrastination
+Real-time body-doubling sessions with verified partners
+Focusmate / CoFocus
+Our Advantage
+Faster booking via Cal.com
+Higher-quality video via LiveKit
+More customizable matching
+
+
+Design Principles
+Friction-less — book a session in under 60 seconds
+Human-first — sessions feel like working with someone, not being watched
+Trust-safe — reporting, blocking, and community guidelines built in from day one
+Async-friendly — every session leaves behind a written goal & reflection log
+
+
+2.  Strategic Context
+
+Market Landscape
+Platform
+Model
+Weakness We Exploit
+
+
+Focusmate
+Freemium, 3 sessions/week free
+Limited session flexibility, no custom scheduling
+
+
+CoFocus
+Subscription, Pomodoro-only
+Forces Pomodoro on all users
+
+
+FlowClub
+Group sessions, paid
+No 1:1 matching, expensive
+
+
+Our Platform
+Hybrid (free + subscription)
+Cal.com flexible booking + LiveKit HQ video
+
+
+
+
+Target User Personas
+
+Persona A — "The Remote Freelancer"
+Works from home, surrounded by distractions
+Needs external accountability 2–4× per day
+Willing to pay for consistency
+
+Persona B — "The Procrastinating Student"
+Essay or exam coming up, cannot start alone
+Needs one session to break the inertia
+Price-sensitive; wants free tier
+
+Persona C — "The Deep Work Founder"
+Owns their schedule, knows body-doubling works
+Wants reliable, high-quality partners
+Will pay premium for advanced features
+
+Business Model — MVP
+Tier
+Details
+Free
+3 sessions/week · 25 min max
+Pro  ($7/month)
+Unlimited sessions · 25 / 50 / 75 min  (free for now — MVP)
+Team  (Post-MVP)
+Org-wide access + analytics dashboard  (free for now — MVP)
+
+
+Key Differentiators
+Cal.com integration — users own their scheduling page, no vendor lock-in
+LiveKit screen-sharing — optional screen accountability (opt-in per session)
+Goal Tagging — sessions categorised (writing, coding, studying, design) for smarter matching
+Reflection Log — post-session reflections build a personal productivity journal
+
+
+3.  Architecture Blueprint
+
+High-Level System Architecture
+┌─────────────────────────────────────────────────────────────┐
+│                      CLIENT LAYER                           │
+│   Next.js 14 App Router · React · TailwindCSS · shadcn/ui  │
+└─────────────────────┬───────────────────────────────────────┘
+                      │ HTTPS / WebSocket
+┌─────────────────────▼───────────────────────────────────────┐
+│                       API LAYER                             │
+│   NestJS · REST + WebSocket Gateway · JWT Auth · Guards    │
+└──┬─────────────┬──────────────┬─────────────────┬──────────┘
+   │             │              │                 │
+┌──▼──┐   ┌─────▼─────┐  ┌────▼────┐   ┌────────▼──────┐
+│Auth │   │ Session   │  │  User   │   │ Notification  │
+│Svc  │   │ Service   │  │ Service │   │   Service     │
+└──┬──┘   └─────┬─────┘  └────┬────┘   └────────┬──────┘
+   │             │              │                 │
+┌──▼─────────────▼──────────────▼─────────────────▼──────────┐
+│                       DATA LAYER                            │
+│   PostgreSQL 17 (primary) · Redis (queue & presence) · MinIO  │
+└──────────────┬─────────────────────────────────────────────┘
+               │
+   ┌───────────┼──────────────────┐
+   │           │                  │
+┌──▼───────┐ ┌▼──────────┐ ┌─────▼───────┐
+│ Cal.com  │ │  LiveKit  │ │ Email/Push  │
+│(Self-host│ │(Cloud MVP)│ │(Resend/FCM) │
+└──────────┘ └───────────┘ └─────────────┘
+
+
+Tech Stack Decisions
+
+Frontend
+Concern
+Choice
+Reason
+Framework
+Next.js (App Router)
+SSR for SEO, layouts, streaming
+Styling
+TailwindCSS + shadcn/ui
+Rapid, consistent UI
+State
+Zustand + React Query
+Server state separated from UI state
+Realtime UI
+LiveKit React SDK
+Handles video / audio / screenshare
+Calendar UI
+Cal.com Embed
+@calcom/embed-react drops in natively
+
+
+Backend
+Concern
+Choice
+Reason
+Runtime
+Express (Node.js)
+Lightweight, fast, flexible for MVP
+Database
+PostgreSQL 17
+Relational integrity for sessions/users
+Cache / Queue
+Redis (BullMQ)
+Session matching queue, presence tracking
+ORM
+Prisma
+Type-safe schema, migrations
+Auth
+Better Auth / NextAuth
+JWT + OAuth (Google)
+
+
+Infrastructure
+Service
+Tool
+Deployment
+Scheduling
+Cal.com (self-hosted)
+Docker Compose
+Video / Screen
+LiveKit (Cloud for MVP)
+LiveKit Cloud → self-host post-MVP
+File Storage
+MinIO (self-hosted)
+Profile photos, session artifacts
+Reverse Proxy
+Nginx
+Docker
+CI/CD
+GitHub Actions
+Automated deploys
+
+
+Repository Structure (Monorepo — Turborepo)
+focusmate-clone/
+├── apps/
+│   ├── web/                    # Next.js frontend
+│   │   ├── app/
+│   │   │   ├── (auth)/         # Login, Register, Onboarding
+│   │   │   ├── dashboard/      # Main app shell
+│   │   │   ├── session/[id]/   # Live session room
+│   │   │   ├── schedule/       # Cal.com booking page
+│   │   │   └── profile/[slug]/ # Public profile
+│   │   └── components/
+│   │       ├── session/        # LiveKit video components
+│   │       ├── booking/        # Cal.com embed wrappers
+│   │       └── ui/             # shadcn components
+│   │
+│   └── api/                    # Express backend
+│       ├── src/
+│       │   ├── auth/
+│       │   ├── users/
+│       │   ├── sessions/
+│       │   ├── matching/
+│       │   ├── livekit/
+│       │   └── notifications/
+│       └── prisma/
+│           └── schema.prisma
+│
+├── packages/
+│   ├── shared-types/           # DTOs, enums shared FE/BE
+│   ├── ui/                     # Shared design system
+│   └── config/                 # ESLint, TS, Tailwind configs
+│
+└── infrastructure/
+    ├── docker-compose.yml
+    ├── calcom/
+    └── nginx/
+
+
+
+4.  Core Feature Requirements
+
+F-01  ·  Authentication & Onboarding
+
+Requirements
+Sign up via Email/Password or Google OAuth
+Email verification before first session
+Onboarding wizard (3 steps max): timezone, work categories, preferred session length
+Public profile page at /profile/[username]
+
+Constraints
+Passwords hashed with bcrypt (rounds: 12)
+JWT access token (15 min) + refresh token (7 days) in httpOnly cookie
+No dark patterns on free tier — limits shown transparently
+
+F-02  ·  Session Booking via Cal.com
+
+Requirements
+Each user gets a Cal.com booking page (auto-created on registration)
+Booking page embedded in /schedule using @calcom/embed-react
+Event types pre-configured: 25 min, 50 min, 75 min focus sessions
+Cal.com webhook → our API on BOOKING_CREATED / BOOKING_CANCELLED / BOOKING_RESCHEDULED
+Booking confirmation triggers email + dashboard session card
+Users can share their Cal.com link directly with a partner
+
+Integration Flow
+User fills Cal.com form
+  → Cal.com fires webhook → /api/webhooks/calcom
+    → Parse booking payload
+      → Create Session record in DB
+        → Notify both participants (email + in-app)
+          → 5 min before: reminder notification
+            → Session room unlocked at start time
+
+
+Business Rules
+Free tier: max 3 bookings/week enforced at booking time via middleware
+Partner can be: (a) a specific user by username, or (b) "any available" via queue
+Cancellation requires ≥ 1 hour notice to avoid strike
+
+F-03  ·  Matching Engine
+
+Requirements
+Users book a session by selecting a calendar slot
+Time slots are available every 15 minutes
+Multiple users can book the same slot
+Users are matched in pairs of 2 within the same slot and duration
+Matching is based on: same slot, same duration, no block relationship, active and not banned users
+Categories and profile tags are collected for profile/session context only — not required for matching in MVP
+If a slot has an odd number of bookings, the extra unmatched user remains pending
+If no partner is found before the session start cutoff, the user is offered fallback options
+
+Architecture
+User books a slot
+→ create booking request
+→ find earliest unmatched booking in the same slot and duration
+→ if found:
+   create session for both users
+   mark both bookings as matched
+   notify both users
+→ if not found:
+   keep booking pending
+
+
+F-04  ·  Live Session Room (LiveKit)
+
+Requirements
+Session room at /session/[sessionId] — entry only for booked participants
+Session starts with a Goal Setting modal (15s timeout → auto-dismissed)
+Video UI: partner tile (main), self tile (bottom-right), mute, camera, screen share
+Timer counts down from session length — 5-min warning toast
+Reflection modal on session end
+Report / leave button always visible
+
+LiveKit Room Config
+const roomConfig: RoomOptions = {
+  adaptiveStream: true,
+  dynacast: true,
+  videoCaptureDefaults: {
+    resolution: VideoPresets.h540.resolution,
+  },
+  publishDefaults: {
+    videoEncoding: VideoPresets.h540.encoding,
+    videoCodec: 'vp9',
+    dtx: true,
+  },
+};
+
+
+Token Generation (Backend)
+// NestJS LiveKit Service
+generateToken(sessionId: string, userId: string, userName: string): string {
+  const token = new AccessToken(
+    process.env.LIVEKIT_API_KEY,
+    process.env.LIVEKIT_API_SECRET,
+    { identity: userId, name: userName }
+  );
+  token.addGrant({
+    roomJoin: true,
+    room: sessionId,
+    canPublish: true,
+    canSubscribe: true,
+    canPublishData: true,
+  });
+  return token.toJwt();
+}
+
+
+F-05  ·  Session Lifecycle Management
+
+Session States
+PENDING → CONFIRMED → ACTIVE → COMPLETED
+                    ↘ CANCELLED
+                    ↘ NO_SHOW
+
+
+State Rules
+ACTIVE: both users have joined the LiveKit room
+NO_SHOW: one user never joined within 5 min of start time
+COMPLETED: timer ends OR both users leave naturally
+On COMPLETED: trigger Reflection modal, save, update stats
+On NO_SHOW: after 3 incidents → account warning
+
+F-06  ·  User Dashboard
+Upcoming sessions list (next 7 days)
+Book a new session CTA → matching queue OR Cal.com page
+Session history with completion status + reflection snippets
+Weekly stats: sessions completed, focus hours, streak
+Partner history: previous partners with optional reconnect
+Free tier usage indicator: "X / 3 sessions used this week"
+
+F-07  ·  Notifications
+
+Channels: Email (Resend) · In-App (WebSocket) · Google Calendar (via Cal.com) · Browser Push (Post-MVP)
+
+Event
+Email
+In-App
+Google Cal
+Session booked
+✅
+✅ + GCal
+✅
+Match found
+✅
+✅
+—
+24h reminder
+✅
+✅
+✅
+5-min reminder
+—
+✅
+—
+Partner no-show
+✅
+✅
+—
+Session completed
+✅
+✅ + GCal
+✅
+Account warning
+✅
+✅
+—
+
+
+F-08  ·  Trust & Safety
+Report user (reason categories: inappropriate behavior, no-show, harassment)
+Block user (removes from future matching pool bidirectionally)
+Community Guidelines page (accepted on sign-up)
+Admin dashboard: review reports, issue warnings, ban accounts
+Strike system: 3 strikes → temporary ban, 5 → permanent ban
+
+F-09  ·  Profile & Settings
+
+Public Profile
+Display name, avatar, member since, total focus hours
+Work categories, languages spoken
+"Book a session with me" button → their Cal.com page
+
+Settings
+Update timezone (critical for matching)
+Notification preferences
+Change password / connected accounts
+Delete account (GDPR compliance)
+Upgrade / manage subscription
+
+
+5.  Data Models
+
+Prisma Schema
+model User {
+  id                String    @id @default(cuid())
+  email             String    @unique
+  passwordHash      String?
+  displayName       String
+  username          String    @unique
+  avatarUrl         String?
+  timezone          String    @default("UTC")
+  categories        Category[]
+  preferredLength   Int[]     @default([25, 50])
+  calcomUserId      String?   @unique
+  calcomUsername    String?
+  stripeCustomerId  String?
+  planTier          PlanTier  @default(FREE)
+  strikeCount       Int       @default(0)
+  isActive          Boolean   @default(true)
+  isBanned          Boolean   @default(false)
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+ 
+  sessionsAsUser1   Session[] @relation("User1Sessions")
+  sessionsAsUser2   Session[] @relation("User2Sessions")
+  reflections       Reflection[]
+  reportsGiven      Report[]  @relation("Reporter")
+  reportsReceived   Report[]  @relation("Reported")
+  blocks            Block[]   @relation("Blocker")
+  blockedBy         Block[]   @relation("Blocked")
+}
+
+
+model Session {
+  id              String        @id @default(cuid())
+  user1Id         String
+  user2Id         String?
+  durationMin     Int           // 25 | 50 | 75
+  status          SessionStatus @default(PENDING)
+  scheduledAt     DateTime
+  startedAt       DateTime?
+  endedAt         DateTime?
+  calcomBookingId String?       @unique
+  livekitRoomName String        @unique
+  category        Category?
+  user1Goal       String?
+  user2Goal       String?
+ 
+  user1           User          @relation("User1Sessions", fields: [user1Id], references: [id])
+  user2           User?         @relation("User2Sessions", fields: [user2Id], references: [id])
+  reflections     Reflection[]
+  reports         Report[]
+  createdAt       DateTime      @default(now())
+}
+
+
+model Reflection {
+  id          String   @id @default(cuid())
+  sessionId   String
+  userId      String
+  text        String
+  rating      Int?     // 1–5 optional self-rating
+  createdAt   DateTime @default(now())
+}
+ 
+model Report {
+  id          String       @id @default(cuid())
+  reporterId  String
+  reportedId  String
+  sessionId   String?
+  reason      ReportReason
+  description String?
+  status      ReportStatus @default(OPEN)
+  createdAt   DateTime     @default(now())
+}
+ 
+model Block {
+  id        String   @id @default(cuid())
+  blockerId String
+  blockedId String
+  createdAt DateTime @default(now())
+  @@unique([blockerId, blockedId])
+}
+ 
+enum SessionStatus { PENDING CONFIRMED ACTIVE COMPLETED CANCELLED NO_SHOW }
+enum PlanTier      { FREE PRO TEAM }
+enum Category      { CODING WRITING STUDYING DESIGN ADMIN OTHER }
+enum ReportReason  { NO_SHOW INAPPROPRIATE HARASSMENT SPAM OTHER }
+enum ReportStatus  { OPEN REVIEWED RESOLVED DISMISSED }
+
+
+
+6.  User Flows
+
+Flow A — Slot Booking & Auto-Pairing
+1.  User opens the booking calendar
+2.  User selects a session duration (25 / 50 / 75 min)
+3.  User sees available time slots starting every 15 minutes
+4.  User chooses a slot and confirms booking
+5.  System creates a booking request for that slot
+6.  System checks for unmatched users in the same slot and duration
+7a. If a compatible unmatched user exists:
+      → system pairs both users
+      → creates a Session record
+      → marks both bookings as matched
+      → notifies both users
+7b. If no partner is available yet:
+      → booking remains PENDING
+      → user sees booking as "Waiting for partner" on dashboard
+8.  Before session start, matched users receive reminders
+9.  At session time → "Join Session" button becomes active
+10. Both users enter /session/[id]
+11. Live session starts with Goal check-in modal (15s)
+12. Timer runs for the selected duration
+13. Session ends → Reflection modal
+14. Dashboard updates with session result
+
+
+Flow B — Scheduled Booking (Cal.com)
+1.  User visits /schedule (or shares their Cal.com link)
+2.  Partner picks a time slot on the Cal.com embed
+3.  Cal.com sends BOOKING_CREATED webhook to our API
+4.  API creates Session record, links both users
+5.  Email confirmation sent to both parties
+6.  Dashboard shows upcoming session card with countdown
+7.  At session time → "Join Session" button activates
+8.  → Continues from step 6 in Flow A
+
+
+Flow C — Direct Partner Booking
+1.  User visits another user's public profile /profile/[username]
+2.  User clicks "Book a Focus Session"
+3.  User selects an available slot from that user's calendar
+4.  System creates a CONFIRMED session between both users directly
+5.  Both users receive email confirmation + Google Calendar invite
+6.  Dashboard shows upcoming session card with countdown
+7.  At session time → "Join Session" button activates
+8.  Both users join the live session room
+9.  Session ends → Reflection modal + dashboard update
+
+
+
+7.  Integration Contracts
+
+Cal.com Integration
+
+Docker Compose Setup
+calcom:
+  image: calcom/cal.com:latest
+  environment:
+    DATABASE_URL: ${CALCOM_DATABASE_URL}
+    NEXTAUTH_URL: http://calcom:3000
+    NEXTAUTH_SECRET: ${CALCOM_SECRET}
+    CALENDSO_ENCRYPTION_KEY: ${CALCOM_ENCRYPTION_KEY}
+  ports:
+    - "3001:3000"
+
+
+Webhook Payload (BOOKING_CREATED)
+interface CalcomWebhookPayload {
+  triggerEvent: 'BOOKING_CREATED' | 'BOOKING_CANCELLED' | 'BOOKING_RESCHEDULED';
+  payload: {
+    uid: string;           // → our calcomBookingId
+    startTime: string;     // ISO 8601
+    endTime: string;
+    duration: number;      // minutes
+    organizer: { email: string };
+    attendees: Array<{ email: string; name: string }>;
+    metadata: { focusCategory?: string };
+  };
+}
+
+
+Webhook Handler (NestJS)
+@Post('webhooks/calcom')
+@UseGuards(CalcomWebhookGuard) // validates X-Cal-Signature-256
+async handleCalcomWebhook(@Body() payload: CalcomWebhookPayload) {
+  switch (payload.triggerEvent) {
+    case 'BOOKING_CREATED':
+      return this.sessionsService.createFromCalcom(payload);
+    case 'BOOKING_CANCELLED':
+      return this.sessionsService.cancelFromCalcom(payload.payload.uid);
+    case 'BOOKING_RESCHEDULED':
+      return this.sessionsService.rescheduleFromCalcom(payload);
+  }
+}
+
+
+LiveKit Integration
+
+Environment Variables
+LIVEKIT_API_KEY=your_api_key
+LIVEKIT_API_SECRET=your_api_secret
+LIVEKIT_WS_URL=wss://your-project.livekit.cloud
+
+
+Frontend Room Join
+const token = await fetch(`/api/sessions/${sessionId}/token`).then(r => r.json());
+ 
+<LiveKitRoom
+  serverUrl={process.env.NEXT_PUBLIC_LIVEKIT_URL}
+  token={token}
+  options={roomConfig}
+  onDisconnected={handleSessionEnd}
+>
+  <SessionUI />
+</LiveKitRoom>
+
+
+Screen Share (Opt-in)
+const startScreenShare = async () => {
+  await localParticipant.setScreenShareEnabled(true, {
+    audio: true,
+    selfBrowserSurface: 'exclude',
+  });
+};
+
+
+
+8.  Non-Functional Requirements
+
+Performance Targets
+Metric
+Target
+Dashboard LCP
+< 2 seconds
+Session room — video live
+< 3 seconds after page load
+Matching queue P90
+< 10 seconds
+API response P95 (non-video)
+< 200 ms
+
+
+Security
+All API routes behind JWT guard
+LiveKit tokens expire in 2 hours (session length + buffer)
+Cal.com webhooks verified via HMAC signature
+Rate limiting on auth endpoints: 5 req / min
+Input sanitization on all user-generated content (goals, reflections)
+GDPR: data deletion endpoint + privacy policy required
+
+Reliability
+Session state persisted to DB — LiveKit disconnect is recoverable
+If a user drops and reconnects within 2 min, session continues
+BullMQ jobs with retry (3× with exponential backoff) for notifications
+
+Scalability Path (Post-MVP)
+Stateless Express → horizontal scaling
+Redis for shared state (queue, presence, rate limits)
+LiveKit handles video scaling natively
+Cal.com can be load-balanced independently
+
+
+9.  MVP Scope & Phased Roadmap
+
+Phase 0 — Foundation  (Week 1–2)
+Monorepo setup (Turborepo + Bun)
+Docker Compose: PostgreSQL, Redis, MinIO, Cal.com
+Express scaffold with Prisma migrations
+Next.js scaffold with auth (login, register, protected routes)
+LiveKit Cloud account + test room
+
+Phase 1 — Core Loop  (Week 3–5)
+User registration + onboarding wizard
+Cal.com self-hosted + webhook integration
+Session booking flow via Cal.com embed
+LiveKit session room (video + timer + goals)
+Reflection modal + save to DB
+Basic dashboard (upcoming + history)
+
+Phase 2 — Matching Engine  (Week 6–7)
+Redis queue-based instant matching
+Matching algorithm (length + category + timezone)
+"Focus Now" flow end-to-end
+WebSocket notifications for match found
+No-show detection (5-min grace period via BullMQ)
+
+Phase 3 — Trust & Polish  (Week 8–9)
+Report / block system
+Email notifications (Resend)
+Free tier enforcement (3 sessions / week)
+Public profile pages
+Screenshare opt-in inside sessions
+
+Phase 4 — Monetization  (Week 10)
+Stripe subscription (Pro tier)
+Tier enforcement middleware
+Upgrade flow + billing portal
+
+Post-MVP Backlog
+Mobile app (React Native + LiveKit mobile SDK)
+Group sessions (3–5 people)
+Focus music integration (Lo-fi / Spotify)
+AI-powered partner matching (based on reflection history)
+Team / org accounts with analytics dashboard
+Browser extension (ambient presence indicator)
+
+
+10.  Agent Instructions  (agent.md)
+This section defines constraints for any AI coding agent working on this codebase.
+
+Hard Constraints — Architecture
+NEVER use REST where WebSocket is appropriate (session presence, match notifications)
+NEVER store LiveKit tokens in localStorage — use in-memory state or server-side session
+ALWAYS generate LiveKit tokens server-side (Express), NEVER on the client
+ALWAYS verify Cal.com webhook signatures before processing
+Session room name = session.id (UUID) — never use user IDs as room names
+
+Hard Constraints — Code Style
+All request payloads must be validated with a dedicated validation middleware or Zod schema
+All Prisma queries must be wrapped in try/catch with proper error mapping
+Use structured error responses (e.g. { error, statusCode }) consistently — never throw unhandled Errors
+Frontend: no useEffect for data fetching — use React Query (TanStack Query)
+All user-generated text must be sanitized before storage (DOMPurify or equivalent)
+
+Hard Constraints — Database
+NEVER run raw SQL — use Prisma query API only
+All schema changes require a new migration file (never edit existing migrations)
+Index on: sessions.status, sessions.scheduledAt, sessions.user1Id, sessions.user2Id
+
+Hard Constraints — LiveKit
+Always pass adaptiveStream: true and dynacast: true in RoomOptions
+Screen share is always opt-in per session — NEVER auto-start
+On room disconnect, attempt reconnect once before marking session as ended
+
+Hard Constraints — Cal.com
+Cal.com runs as a separate Docker service — NEVER couple its DB to ours
+Communication is webhook-only (Cal.com → our API)
+Store calcomBookingId on our Session model for idempotency checks
+
+Hard Constraints — Business Logic
+Free tier: enforce 3 sessions/week in SessionsService.create() — check BEFORE calling Cal.com
+No-show: trigger at T+5min via BullMQ scheduled job, NOT on disconnect event
+Strikes are immutable — never delete, only add
+Block is bidirectional — always create two Block records (A→B and B→A)
+
+What Agents Should NOT Change
+Prisma schema enums (SessionStatus, PlanTier) without explicit instruction
+LiveKit room config presets (video resolution / encoding)
+Webhook signature verification logic
+Auth token expiry values
+
+What Agents CAN Do Autonomously
+Add new NestJS modules following existing patterns
+Add new React Query hooks following existing conventions
+Write and run Prisma migrations
+Add new email templates
+Add new shadcn/ui components
+
+
+
+
+Document Version 1.0  ·  MVP Build  ·  April 2026  ·  Owner: Engineering Lead
