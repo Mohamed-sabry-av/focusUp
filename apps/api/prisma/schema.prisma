@@ -59,8 +59,7 @@ model User {
   timezone         String       @default("UTC")
   categories       Category[]
   preferredLength  Int[]        @default([25, 50])
-  calcomUserId     String?      @unique
-  calcomUsername   String?
+
   stripeCustomerId String?
   planTier         PlanTier     @default(FREE)
   strikeCount      Int          @default(0)
@@ -89,7 +88,7 @@ model Session {
   scheduledAt     DateTime
   startedAt       DateTime?
   endedAt         DateTime?
-  calcomBookingId String?       @unique
+
   livekitRoomName String        @unique
   category        Category?
   user1Goal       String?

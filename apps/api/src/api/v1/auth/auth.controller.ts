@@ -1,7 +1,7 @@
-import { Request, Response, NextFunction } from 'express';
+import type { Request, Response, NextFunction } from 'express';
 import { AuthService } from './auth.service';
 import { generateTokens, verifyRefreshToken } from '../../../lib/jwt';
-import { RegisterInput, LoginInput } from '@focusUp/shared-types';
+import type { RegisterInput, LoginInput } from '@focusUp/shared-types';
 import { AppError } from '../../../utils/errors';
 
 export class AuthController {

@@ -11,10 +11,17 @@ import passport from './config/passport';
 
 const app = express();
 
-app.use(cors());
+app.use(cors({
+  origin: 'http://localhost:3001',
+  
+}));
 app.use(helmet());
 app.use(cookieParser());
-app.use(express.json());
+app.use(express.json({
+  verify: (req: any, _res, buf) => {
+    req.rawBody = buf;
+  }
+}));
 app.use(passport.initialize());
 
 const authLimiter = rateLimit({

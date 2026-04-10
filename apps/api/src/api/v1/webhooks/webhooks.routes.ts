@@ -1,6 +1,7 @@
 import { Router } from 'express';
-import { WebhooksController } from './webhooks.controller';
 
 const router = Router();
-// Routes will be added as we build features
+
+// Webhook routes — will be used for Stripe webhooks in the future
+
 export default router;

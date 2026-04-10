@@ -12,7 +12,7 @@ permanent. No throwaway code. No shortcuts that create tech debt.
 - **Cache/Queue**: Redis via BullMQ
 - **Auth**: Better Auth with JWT (access: 15min, refresh: 7d, httpOnly cookies)
 - **Video**: LiveKit (Cloud) via @livekit/server-sdk + @livekit/components-react
-- **Scheduling**: Cal.com (self-hosted Docker) — webhook-only communication
+- **Scheduling**: Custom-built slot-based booking system (no Cal.com dependency)
 - **Email**: Resend SDK
 - **Monorepo**: Turborepo with Bun
 
@@ -24,7 +24,7 @@ permanent. No throwaway code. No shortcuts that create tech debt.
 - NO raw SQL — Prisma query API only
 - NO useEffect for data fetching — TanStack React Query only
 - LiveKit tokens generated server-side ONLY — never on client
-- Cal.com webhook signatures verified via HMAC before processing
+- Booking system is custom-built. Slot-based booking: users pick time slots every 15 minutes, system matches them
 - Session room names = session.id (cuid) — never user IDs
 - WebSocket for: session presence, match notifications, in-app notifications
 - REST for: everything else
@@ -57,9 +57,8 @@ permanent. No throwaway code. No shortcuts that create tech debt.
 ## What You Must NEVER Change
 - Prisma schema enums (SessionStatus, PlanTier) without explicit instruction
 - LiveKit room config presets (resolution/encoding)
-- Webhook signature verification logic
+- Stripe webhook signature verification logic
 - Auth token expiry values (15min access, 7d refresh)
-- Docker Compose service names or port mappings
 
 ## Quality Bar
 Fight entropy. Leave the codebase better than you found it.
