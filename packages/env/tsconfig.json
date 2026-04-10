@@ -1,0 +1,3 @@
+{
+  "extends": "@focusUp/config/tsconfig.base.json"
+}

@@ -1,0 +1,28 @@
+{
+  "name": "@focusUp/api",
+  "type": "module",
+  "exports": {
+    ".": {
+      "default": "./src/index.ts"
+    },
+    "./*": {
+      "default": "./src/*.ts"
+    }
+  },
+  "scripts": {},
+  "dependencies": {
+    "@focusUp/db": "workspace:*",
+    "@focusUp/env": "workspace:*",
+    "@orpc/client": "catalog:",
+    "@orpc/openapi": "catalog:",
+    "@orpc/server": "catalog:",
+    "@orpc/zod": "catalog:",
+    "dotenv": "catalog:",
+    "zod": "catalog:"
+  },
+  "devDependencies": {
+    "@focusUp/config": "workspace:*",
+    "@types/express": "catalog:",
+    "typescript": "^5"
+  }
+}
