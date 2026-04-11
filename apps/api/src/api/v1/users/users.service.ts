@@ -1,5 +1,5 @@
 import { prisma } from '../../../lib/prisma';
-import { OnboardingInput } from '@focusUp/shared-types';
+import type { OnboardingInput } from '@focusUp/shared-types';
 import { AppError } from '../../../utils/errors';
 import { SessionStatus, PlanTier } from '@prisma/client';
 
@@ -143,7 +143,7 @@ export class UsersService {
     };
   }
 
-  static async updateOnboarding(userId: string, data: typeof OnboardingInput._type) {
+  static async updateOnboarding(userId: string, data: OnboardingInput) {
     const user = await prisma.user.update({
       where: { id: userId },
       data: {

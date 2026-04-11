@@ -3,9 +3,9 @@ import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
 import { AppError } from '../../../utils/errors';
 import { RegisterInput, LoginInput } from '@focusUp/shared-types';
+import { env } from '@focusUp/env/server';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'fallback_secret_do_not_use';
-const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:3000';
 
 export class AuthService {
   static async sendVerificationEmail(userId: string, email: string): Promise<string> {
@@ -13,7 +13,7 @@ export class AuthService {
       expiresIn: '24h',
     });
 
-    console.log(`Verification URL: ${FRONTEND_URL}/verify-email?token=${token}`);
+    console.log(`Verification URL: ${env.CORS_ORIGIN}/verify-email?token=${token}`);
     return token;
   }
 
@@ -86,6 +86,7 @@ export class AuthService {
         displayName: data.displayName,
         username: data.username,
         emailVerified: false,
+        categories: [],
       },
     });
 

@@ -18,7 +18,7 @@ vi.mock('../../../lib/prisma', () => ({
   },
 }));
 
-const SECRET = 'fallback_secret_do_not_use';
+const SECRET = process.env.JWT_SECRET || 'fallback_secret_do_not_use';
 
 function authCookie(userId: string): string {
   const token = jwt.sign({ sub: userId }, SECRET);

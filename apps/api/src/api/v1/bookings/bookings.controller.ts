@@ -1,9 +1,8 @@
-import { Request, Response, NextFunction } from 'express';
-import { AppError } from '../../../utils/errors';
+import type { Request, Response, NextFunction } from 'express';
 
 export class BookingsController {
   // Example placeholder
-  static async placeholder(req: Request, res: Response, next: NextFunction) {
+  static async placeholder(_req: Request, res: Response, next: NextFunction) {
     try {
       res.json({ message: 'bookings endpoint' });
     } catch (error) {

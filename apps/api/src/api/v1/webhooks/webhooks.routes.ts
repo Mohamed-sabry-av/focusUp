@@ -1,6 +1,6 @@
-import { Router } from 'express';
+import express from 'express';
 
-const router = Router();
+const router = express.Router();
 
 // Webhook routes — will be used for Stripe webhooks in the future
 

@@ -1,14 +1,24 @@
+import { env } from '@focusUp/env/server';
+import { PrismaPg } from '@prisma/adapter-pg';
 import { PrismaClient } from '@prisma/client';
 
 const globalForPrisma = global as unknown as { prisma: PrismaClient };
+
+function createPrismaClient(): PrismaClient {
+  const adapter = new PrismaPg({
+    connectionString: env.DATABASE_URL,
+  });
+  return new PrismaClient({
+    adapter,
+    log: ['query', 'info', 'warn', 'error'],
+  });
+}
 
 export const prisma =
   globalForPrisma.prisma ||
   (process.env.NODE_ENV === 'test'
     ? ({} as PrismaClient) // Should be mocked anyway
-    : new PrismaClient({
-        log: ['query', 'info', 'warn', 'error'],
-      }));
+    : createPrismaClient());
 
 if (process.env.NODE_ENV !== 'production') globalForPrisma.prisma = prisma;
 

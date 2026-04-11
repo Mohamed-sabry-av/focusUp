@@ -1,3 +1,4 @@
+import { SessionStatus } from '@prisma/client';
 import { prisma } from '../../../lib/prisma';
 import { AppError } from '../../../utils/errors';
 import { AccessToken } from 'livekit-server-sdk';
@@ -329,7 +330,11 @@ export class SessionsService {
         },
         {
           status: {
-            in: ['COMPLETED', 'CANCELLED', 'NO_SHOW'],
+            in: [
+              SessionStatus.COMPLETED,
+              SessionStatus.CANCELLED,
+              SessionStatus.NO_SHOW,
+            ],
           },
         },
       ],

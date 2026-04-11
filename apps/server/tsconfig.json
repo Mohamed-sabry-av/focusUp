@@ -1,12 +1,15 @@
 {
   "extends": "@focusUp/config/tsconfig.base.json",
   "compilerOptions": {
-    "composite": true,
+    "noEmit": true,
     "outDir": "dist",
+    "rootDir": "..",
     "baseUrl": ".",
     "paths": {
       "@/*": ["./src/*"]
     },
     "jsx": "react-jsx"
-  }
+  },
+  "include": ["src/**/*.ts", "../api/src/**/*.ts"],
+  "exclude": ["../api/src/**/*.test.ts"]
 }

@@ -5,20 +5,20 @@ import { prisma } from '../lib/prisma';
 
 declare global {
   namespace Express {
-    interface Request {
-      user?: {
-        id: string;
-        email: string;
-        username: string;
-        planTier: string;
-        isActive: boolean;
-        isBanned: boolean;
-      };
+    /** Populated by authMiddleware; aligns with Passport's req.user typing */
+    interface User {
+      id: string;
+      email: string;
+      username: string;
+      planTier: string;
+      isActive: boolean;
+      isBanned: boolean;
+      emailVerified: boolean;
     }
   }
 }
 
-export const authMiddleware = async (req: Request, res: Response, next: NextFunction) => {
+export const authMiddleware = async (req: Request, _res: Response, next: NextFunction) => {
   try {
     const token = req.cookies?.access_token;
     if (!token) {
@@ -52,7 +52,7 @@ export const authMiddleware = async (req: Request, res: Response, next: NextFunc
   }
 };
 
-export const requireAuth = (req: Request, res: Response, next: NextFunction) => {
+export const requireAuth = (req: Request, _res: Response, next: NextFunction) => {
   if (!req.user) {
     return next(new AppError('Not authenticated', 401));
   }

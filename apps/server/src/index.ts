@@ -13,7 +13,8 @@ const app = express();
 app.use(
   cors({
     origin: env.CORS_ORIGIN,
-    methods: ["GET", "POST", "OPTIONS"],
+    credentials: true,
+    methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
   }),
 );
 
@@ -58,6 +59,10 @@ app.use(express.json());
 app.get("/", (_req, res) => {
   res.status(200).send("OK");
 });
+
+// Mount the Express REST API (apps/api) for /api/v1/* routes
+import restApp from "../../api/src/app";
+app.use(restApp);
 
 app.listen(3000, () => {
   console.log("Server is running on http://localhost:3000");

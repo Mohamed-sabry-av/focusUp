@@ -13,7 +13,7 @@ passport.use(
       clientSecret: GOOGLE_CLIENT_SECRET,
       callbackURL: GOOGLE_CALLBACK_URL,
     },
-    async (accessToken, refreshToken, profile: Profile, done) => {
+    async (_accessToken, _refreshToken, profile: Profile, done) => {
       try {
         const email = profile.emails?.[0]?.value;
         if (!email) {
@@ -28,7 +28,9 @@ passport.use(
           return done(null, existingUser);
         }
 
-        const baseUsername = email.split('@')[0].replace(/[^a-zA-Z0-9_-]/g, '-');
+        const at = email.indexOf('@');
+        const localPart = at >= 0 ? email.slice(0, at) : email;
+        const baseUsername = localPart.replace(/[^a-zA-Z0-9_-]/g, '-') || 'user';
         let username = baseUsername;
 
         let isCollision = await prisma.user.findUnique({ where: { username } });
@@ -41,11 +43,12 @@ passport.use(
         const newUser = await prisma.user.create({
           data: {
             email,
-            displayName: profile.displayName || email.split('@')[0],
+            displayName: profile.displayName ?? localPart,
             username,
             passwordHash: null,
             emailVerified: true,
             avatarUrl: profile.photos?.[0]?.value || null,
+            categories: [],
           },
         });
 

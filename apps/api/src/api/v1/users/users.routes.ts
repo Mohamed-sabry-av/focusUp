@@ -1,10 +1,10 @@
-import { Router } from 'express';
+import express from 'express';
 import { UsersController } from './users.controller';
 import { validate } from '../../../middleware/validate';
 import { OnboardingInput } from '@focusUp/shared-types';
 import { requireAuth } from '../../../middleware/auth';
 
-const router = Router();
+const router = express.Router();
 
 // /api/v1/users/me
 router.get('/me', requireAuth, UsersController.getMe);

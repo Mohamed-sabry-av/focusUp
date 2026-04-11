@@ -10,6 +10,7 @@ import { Checkbox } from '@focusUp/ui/components/checkbox';
 import { Label } from '@focusUp/ui/components/label';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from '@focusUp/ui/components/card';
 import { z } from 'zod';
+import { env } from '@focusUp/env/web';
 
 type OnboardingFormValues = z.infer<typeof OnboardingInput>;
 
@@ -50,7 +51,7 @@ export default function OnboardingPage() {
 
   const mutation = useMutation({
     mutationFn: async (data: OnboardingFormValues) => {
-      const res = await fetch('http://localhost:4000/api/v1/users/me/onboarding', {
+      const res = await fetch(`${env.NEXT_PUBLIC_SERVER_URL}/api/v1/users/me/onboarding`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(data),

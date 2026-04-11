@@ -3,13 +3,13 @@ import { AuthService } from './auth.service';
 import { generateTokens, verifyRefreshToken } from '../../../lib/jwt';
 import type { RegisterInput, LoginInput } from '@focusUp/shared-types';
 import { AppError } from '../../../utils/errors';
+import { env } from '@focusUp/env/server';
 
 export class AuthController {
   static async register(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
       const data = req.body as RegisterInput;
       const user = await AuthService.register(data);
-
       const { accessToken, refreshToken } = generateTokens(user.id);
 
       res.cookie('access_token', accessToken, {
@@ -80,8 +80,7 @@ export class AuthController {
         maxAge: 7 * 24 * 60 * 60 * 1000
       });
 
-      const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
-      res.redirect(`${frontendUrl}/dashboard`);
+      res.redirect(`${env.CORS_ORIGIN}/dashboard`);
     } catch (error) {
       next(error);
     }
@@ -109,7 +108,7 @@ export class AuthController {
     }
   }
 
-  static async logout(req: Request, res: Response, next: NextFunction): Promise<void> {
+  static async logout(_req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
       res.clearCookie('access_token');
       res.clearCookie('refresh_token');

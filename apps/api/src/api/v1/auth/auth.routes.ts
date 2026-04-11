@@ -1,4 +1,4 @@
-import { Router } from 'express';
+import express from 'express';
 import passport from 'passport';
 import rateLimit from 'express-rate-limit';
 import { AuthController } from './auth.controller';
@@ -6,7 +6,7 @@ import { validate } from '../../../middleware/validate';
 import { RegisterInput, LoginInput } from '@focusUp/shared-types';
 import { authMiddleware, requireAuth } from '../../../middleware/auth';
 
-const router = Router();
+const router = express.Router();
 
 const resendLimiter = rateLimit({
   windowMs: 1 * 60 * 1000,

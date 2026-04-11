@@ -17,8 +17,9 @@ import { SessionTimer } from '@/components/session/SessionTimer';
 import { ReflectionModal } from '@/components/session/ReflectionModal';
 import { cn } from '@focusUp/ui/lib/utils';
 import { Mic, MicOff, Video, VideoOff, Settings, X, HelpCircle, LogOut, Grid, Maximize, MessageSquare, MonitorUp, Star } from 'lucide-react';
+import { env } from '@focusUp/env/web';
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000';
+const API_URL = env.NEXT_PUBLIC_SERVER_URL;
 const LIVEKIT_URL = process.env.NEXT_PUBLIC_LIVEKIT_URL || '';
 
 const roomConfig = {

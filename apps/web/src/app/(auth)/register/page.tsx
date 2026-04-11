@@ -10,6 +10,7 @@ import { z } from 'zod';
 import { Eye, EyeOff, Loader2 } from 'lucide-react';
 import { cn } from '@focusUp/ui/lib/utils';
 import { toast } from 'sonner';
+import { env } from '@focusUp/env/web';
 
 type RegisterFormValues = z.infer<typeof RegisterInput>;
 
@@ -47,7 +48,7 @@ export default function RegisterPage() {
 
   const mutation = useMutation({
     mutationFn: async (data: RegisterFormValues) => {
-      const res = await fetch('http://localhost:3000/api/v1/auth/register', {
+      const res = await fetch(`${env.NEXT_PUBLIC_SERVER_URL}/api/v1/auth/register`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(data),
@@ -76,7 +77,7 @@ export default function RegisterPage() {
   };
 
   const handleGoogleLogin = () => {
-    window.location.href = 'http://localhost:3000/api/v1/auth/google';
+    window.location.href = `${env.NEXT_PUBLIC_SERVER_URL}/api/v1/auth/google`;
   };
 
   return (

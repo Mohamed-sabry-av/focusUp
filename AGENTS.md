@@ -11,7 +11,7 @@ permanent. No throwaway code. No shortcuts that create tech debt.
 - **Database**: PostgreSQL 17 via Prisma ORM
 - **Cache/Queue**: Redis via BullMQ
 - **Auth**: Better Auth with JWT (access: 15min, refresh: 7d, httpOnly cookies)
-- **Video**: LiveKit (Cloud) via @livekit/server-sdk + @livekit/components-react
+- **Video**: LiveKit (self-hosted Docker) — ws://localhost:7880 for development
 - **Scheduling**: Custom-built slot-based booking system (no Cal.com dependency)
 - **Email**: Resend SDK
 - **Monorepo**: Turborepo with Bun

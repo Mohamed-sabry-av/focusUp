@@ -1,7 +1,7 @@
-import { Router } from 'express';
+import express from 'express';
 import { SessionsController } from './sessions.controller';
 
-const router = Router();
+const router = express.Router();
 
 // GET /sessions/token/:sessionId — Generate LiveKit token for session room
 router.get('/token/:sessionId', SessionsController.getLivekitToken);

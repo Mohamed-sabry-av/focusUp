@@ -36,14 +36,18 @@
     "dev:web": "turbo -F web dev",
     "dev:server": "turbo -F server dev",
     "db:push": "turbo -F @focusUp/db db:push",
+    "db:push:api": "prisma db push --schema apps/api/prisma/schema.prisma",
     "db:studio": "turbo -F @focusUp/db db:studio",
     "db:generate": "turbo -F @focusUp/db db:generate",
+    "db:generate:api": "prisma generate --schema apps/api/prisma/schema.prisma",
     "db:migrate": "turbo -F @focusUp/db db:migrate",
-    "prepare": "husky"
+    "db:migrate:api": "prisma migrate dev --schema apps/api/prisma/schema.prisma",
+    "prepare": "husky && prisma generate --schema apps/api/prisma/schema.prisma"
   },
   "dependencies": {
     "@focusUp/env": "workspace:*",
     "@focusUp/shared-types": "workspace:*",
+    "@prisma/adapter-pg": "^7.7.0",
     "@prisma/client": "^7.7.0",
     "bcrypt": "^6.0.0",
     "cookie-parser": "^1.4.7",
@@ -56,6 +60,7 @@
     "ioredis": "^5.10.1",
     "jsonwebtoken": "^9.0.3",
     "livekit-server-sdk": "^2.15.1",
+    "pg": "^8.17.1",
     "sanitize-html": "^2.17.2",
     "zod": "^4.3.6"
   },
@@ -68,6 +73,7 @@
     "@types/passport-google-oauth20": "^2.0.17",
     "@types/sanitize-html": "^2.16.1",
     "@types/supertest": "^7.2.0",
+    "prisma": "^7.7.0",
     "supertest": "^7.2.2",
     "turbo": "^2.8.12",
     "typescript": "^5",

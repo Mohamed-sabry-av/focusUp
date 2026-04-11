@@ -1,4 +1,4 @@
-import { Router } from 'express';
+import express from 'express';
 import authRoutes from './auth/auth.routes';
 import usersRoutes from './users/users.routes';
 import sessionsRoutes from './sessions/sessions.routes';
@@ -8,7 +8,7 @@ import notificationsRoutes from './notifications/notifications.routes';
 
 import { authMiddleware, requireAuth } from '../../middleware/auth';
 
-const v1Router = Router();
+const v1Router = express.Router();
 
 // Public routes
 v1Router.use('/auth', authRoutes);

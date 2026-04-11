@@ -100,7 +100,7 @@ describe("Auth Endpoints", () => {
     it("should verify email successfully", async () => {
       const token = jwt.sign(
         { userId: "u1", email: "e@x.com", purpose: "email-verification" },
-        "fallback_secret_do_not_use",
+        process.env.JWT_SECRET || "fallback_secret_do_not_use",
       );
       vi.mocked(prisma.user.findUnique).mockResolvedValue({
         id: "u1",
@@ -122,7 +122,7 @@ describe("Auth Endpoints", () => {
     it("should return idempotent success if already verified", async () => {
       const token = jwt.sign(
         { userId: "u1", email: "e@x.com", purpose: "email-verification" },
-        "fallback_secret_do_not_use",
+        process.env.JWT_SECRET || "fallback_secret_do_not_use",
       );
       vi.mocked(prisma.user.findUnique).mockResolvedValue({
         id: "u1",
@@ -147,7 +147,7 @@ describe("Auth Endpoints", () => {
     it("should return 400 for expired token", async () => {
       const token = jwt.sign(
         { userId: "u1", email: "e@x.com", purpose: "email-verification" },
-        "fallback_secret_do_not_use",
+        process.env.JWT_SECRET || "fallback_secret_do_not_use",
         { expiresIn: "-1s" },
       );
       const res = await request(app).get(
@@ -161,7 +161,7 @@ describe("Auth Endpoints", () => {
   describe("Resend Verification", () => {
     it("should resend verification successfully", async () => {
       const { verifyAccessToken } = await import("../../../lib/jwt");
-      const testToken = jwt.sign({ sub: "u1" }, "fallback_secret_do_not_use");
+      const testToken = jwt.sign({ sub: "u1" }, process.env.JWT_SECRET || "fallback_secret_do_not_use");
 
       vi.mocked(prisma.user.findUnique).mockResolvedValueOnce({
         id: "u1",
@@ -184,7 +184,7 @@ describe("Auth Endpoints", () => {
     });
 
     it("should return 400 if already verified", async () => {
-      const testToken = jwt.sign({ sub: "u1" }, "fallback_secret_do_not_use");
+      const testToken = jwt.sign({ sub: "u1" }, process.env.JWT_SECRET || "fallback_secret_do_not_use");
 
       // Middleware User
       vi.mocked(prisma.user.findUnique).mockResolvedValueOnce({

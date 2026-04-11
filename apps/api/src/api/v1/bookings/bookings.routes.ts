@@ -1,6 +1,5 @@
-import { Router } from 'express';
-import { BookingsController } from './bookings.controller';
+import express from 'express';
 
-const router = Router();
+const router = express.Router();
 // Routes will be added as we build features
 export default router;

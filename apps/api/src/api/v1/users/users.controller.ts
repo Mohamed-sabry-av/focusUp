@@ -1,6 +1,6 @@
 import type { Request, Response, NextFunction } from 'express';
 import { UsersService } from './users.service';
-import { OnboardingInput } from '@focusUp/shared-types';
+import type { OnboardingInput } from '@focusUp/shared-types';
 
 export class UsersController {
   static async getMe(req: Request, res: Response, next: NextFunction): Promise<void> {
@@ -38,7 +38,7 @@ export class UsersController {
         return;
       }
 
-      const data = req.body as typeof OnboardingInput._type;
+      const data = req.body as OnboardingInput;
       const user = await UsersService.updateOnboarding(req.user.id, data);
 
       res.status(200).json({ data: { user }, statusCode: 200 });
