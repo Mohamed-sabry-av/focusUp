@@ -1,12 +1,16 @@
-import type { Request, Response, NextFunction } from 'express';
-import { UsersService } from './users.service';
-import type { OnboardingInput } from '@focusUp/shared-types';
+import type { Request, Response, NextFunction } from "express";
+import { UsersService } from "./users.service";
+import type { OnboardingInput } from "@focusUp/shared-types";
 
 export class UsersController {
-  static async getMe(req: Request, res: Response, next: NextFunction): Promise<void> {
+  static async getMe(
+    req: Request,
+    res: Response,
+    next: NextFunction,
+  ): Promise<void> {
     try {
       if (!req.user) {
-        res.status(401).json({ error: 'Not authenticated', statusCode: 401 });
+        res.status(401).json({ error: "Not authenticated", statusCode: 401 });
         return;
       }
 
@@ -17,10 +21,14 @@ export class UsersController {
     }
   }
 
-  static async getStats(req: Request, res: Response, next: NextFunction): Promise<void> {
+  static async getStats(
+    req: Request,
+    res: Response,
+    next: NextFunction,
+  ): Promise<void> {
     try {
       if (!req.user) {
-        res.status(401).json({ error: 'Not authenticated', statusCode: 401 });
+        res.status(401).json({ error: "Not authenticated", statusCode: 401 });
         return;
       }
 
@@ -31,10 +39,14 @@ export class UsersController {
     }
   }
 
-  static async updateOnboarding(req: Request, res: Response, next: NextFunction): Promise<void> {
+  static async updateOnboarding(
+    req: Request,
+    res: Response,
+    next: NextFunction,
+  ): Promise<void> {
     try {
       if (!req.user) {
-        res.status(401).json({ error: 'Not authenticated', statusCode: 401 });
+        res.status(401).json({ error: "Not authenticated", statusCode: 401 });
         return;
       }
 

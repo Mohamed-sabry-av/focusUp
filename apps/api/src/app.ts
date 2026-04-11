@@ -12,9 +12,21 @@ import { env } from "@focusUp/env/server";
 
 const app: Application = express();
 
+const localDevOrigins = [
+  "http://localhost:3000",
+  "http://localhost:3001",
+  "http://127.0.0.1:3000",
+  "http://127.0.0.1:3001",
+];
+const corsOrigin =
+  env.NODE_ENV === "development"
+    ? [...new Set([env.CORS_ORIGIN, ...localDevOrigins])]
+    : env.CORS_ORIGIN;
+
 app.use(
   cors({
-    origin: env.CORS_ORIGIN,
+    origin: corsOrigin,
+    credentials: true,
   }),
 );
 app.use(helmet());

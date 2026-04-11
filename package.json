@@ -36,13 +36,13 @@
     "dev:web": "turbo -F web dev",
     "dev:server": "turbo -F server dev",
     "db:push": "turbo -F @focusUp/db db:push",
-    "db:push:api": "prisma db push --schema apps/api/prisma/schema.prisma",
+    "db:push:api": "prisma db push --config apps/api/prisma.config.ts",
     "db:studio": "turbo -F @focusUp/db db:studio",
     "db:generate": "turbo -F @focusUp/db db:generate",
-    "db:generate:api": "prisma generate --schema apps/api/prisma/schema.prisma",
+    "db:generate:api": "prisma generate --config apps/api/prisma.config.ts",
     "db:migrate": "turbo -F @focusUp/db db:migrate",
-    "db:migrate:api": "prisma migrate dev --schema apps/api/prisma/schema.prisma",
-    "prepare": "husky && prisma generate --schema apps/api/prisma/schema.prisma"
+    "db:migrate:api": "prisma migrate dev --config apps/api/prisma.config.ts",
+    "prepare": "husky && prisma generate --config apps/api/prisma.config.ts"
   },
   "dependencies": {
     "@focusUp/env": "workspace:*",

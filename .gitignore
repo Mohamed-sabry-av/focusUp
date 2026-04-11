@@ -7,6 +7,9 @@ node_modules
 dist
 build
 *.tsbuildinfo
+# Accidental emit next to apps/api sources (can shadow .ts in Bun)
+apps/api/src/**/*.js
+apps/api/src/**/*.d.ts
 
 # Environment variables
 .env
