@@ -1,0 +1,340 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>CoFocus Dashboard | Digital Sanctuary</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            "colors": {
+                    "on-secondary-fixed-variant": "#14487a",
+                    "surface-container": "#f0edec",
+                    "on-error": "#ffffff",
+                    "error": "#ba1a1a",
+                    "on-tertiary": "#ffffff",
+                    "error-container": "#ffdad6",
+                    "on-tertiary-container": "#91c4c8",
+                    "on-secondary-container": "#205083",
+                    "outline-variant": "#c3c6d4",
+                    "secondary-fixed": "#d3e4ff",
+                    "surface-dim": "#dcd9d9",
+                    "on-tertiary-fixed-variant": "#184e52",
+                    "on-background": "#1c1b1b",
+                    "primary": "#0245A3",
+                    "inverse-surface": "#313030",
+                    "surface-variant": "#e5e2e1",
+                    "on-secondary-fixed": "#001c38",
+                    "tertiary": "#003b3f",
+                    "inverse-primary": "#b0c6ff",
+                    "tertiary-fixed": "#b8ecf1",
+                    "tertiary-container": "#1d5256",
+                    "primary-fixed-dim": "#b0c6ff",
+                    "primary-fixed": "#d9e2ff",
+                    "surface": "#fcf9f8",
+                    "on-surface": "#1c1b1b",
+                    "on-error-container": "#93000a",
+                    "tertiary-fixed-dim": "#9ccfd4",
+                    "surface-container-high": "#ebe7e7",
+                    "surface-container-low": "#f6f3f2",
+                    "inverse-on-surface": "#f3f0ef",
+                    "on-primary": "#ffffff",
+                    "surface-container-lowest": "#ffffff",
+                    "secondary-container": "#99c4fd",
+                    "surface-container-highest": "#e5e2e1",
+                    "on-primary-fixed-variant": "#00419c",
+                    "on-tertiary-fixed": "#002022",
+                    "background": "#fcf9f8",
+                    "on-surface-variant": "#434652",
+                    "on-secondary": "#ffffff",
+                    "secondary": "#336094",
+                    "outline": "#737784",
+                    "on-primary-container": "#9eb9ff",
+                    "on-primary-fixed": "#001945",
+                    "secondary-fixed-dim": "#a2c9ff",
+                    "primary-container": "#0245a3",
+                    "surface-tint": "#295ab8",
+                    "surface-bright": "#fcf9f8"
+            },
+            "borderRadius": {
+                    "DEFAULT": "0.125rem",
+                    "lg": "0.25rem",
+                    "xl": "0.5rem",
+                    "full": "0.75rem"
+            },
+            "fontFamily": {
+                    "headline": ["Inter"],
+                    "body": ["Inter"],
+                    "label": ["Inter"]
+            }
+          },
+        },
+      }
+    </script>
+<style>
+        body { font-family: 'Inter', sans-serif; background-color: #fcf9f8; }
+        .material-symbols-outlined { font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24; }
+        .hide-scrollbar::-webkit-scrollbar { display: none; }
+        .hide-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+    </style>
+</head>
+<body class="bg-background text-on-surface overflow-hidden h-screen flex">
+<!-- 1. Vertical Sidebar (Collapsed) -->
+<aside class="w-20 bg-[#001945] flex flex-col items-center py-6 gap-8 shrink-0">
+<div class="text-white font-bold text-xl tracking-tighter mb-4">Co</div>
+<nav class="flex flex-col gap-6">
+<a class="p-3 bg-primary text-white rounded-xl shadow-lg shadow-primary/20" href="#" title="Dashboard">
+<span class="material-symbols-outlined block">dashboard</span>
+</a>
+<a class="p-3 text-slate-400 hover:text-white transition-colors" href="#" title="Calendar">
+<span class="material-symbols-outlined block">calendar_today</span>
+</a>
+<a class="p-3 text-slate-400 hover:text-white transition-colors" href="#" title="Community">
+<span class="material-symbols-outlined block">groups</span>
+</a>
+<a class="p-3 text-slate-400 hover:text-white transition-colors" href="#" title="Messages">
+<span class="material-symbols-outlined block">chat_bubble</span>
+</a>
+</nav>
+<div class="mt-auto flex flex-col gap-6">
+<button class="p-3 text-slate-400 hover:text-white transition-colors">
+<span class="material-symbols-outlined block">notifications</span>
+</button>
+<button class="p-3 text-slate-400 hover:text-white transition-colors">
+<span class="material-symbols-outlined block">settings</span>
+</button>
+</div>
+</aside>
+<div class="flex flex-col flex-1 overflow-hidden">
+<main class="flex flex-1 overflow-hidden">
+<!-- 2. Session Settings (Left Panel) -->
+<aside class="w-80 bg-surface-container-low flex flex-col p-6 gap-6 overflow-y-auto">
+<!-- Session Settings Card -->
+<div class="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm">
+<h2 class="text-xl font-bold text-primary mb-6">Session Settings</h2>
+<div class="space-y-8">
+<!-- Duration -->
+<div>
+<label class="text-[10px] font-bold uppercase tracking-widest text-slate-400 mb-3 block">Duration</label>
+<div class="grid grid-cols-3 gap-2">
+<button class="py-2 text-xs font-bold rounded-xl border border-primary bg-primary text-white">25 min</button>
+<button class="py-2 text-xs font-bold rounded-xl border border-slate-200 text-slate-600 hover:bg-slate-50 transition-all">50 min</button>
+<button class="py-2 text-xs font-bold rounded-xl border border-slate-200 text-slate-600 hover:bg-slate-50 transition-all">75 min</button>
+</div>
+</div>
+<!-- Task Type (Horizontal Layout) -->
+<div>
+<label class="text-[10px] font-bold uppercase tracking-widest text-slate-400 mb-3 block">Task Type</label>
+<div class="grid grid-cols-3 gap-2">
+<button class="flex flex-col items-center gap-1.5 py-3 rounded-xl bg-primary/5 border border-primary text-primary transition-all">
+<span class="material-symbols-outlined text-xl">desktop_windows</span>
+<span class="font-bold text-[10px] uppercase">Desk</span>
+</button>
+<button class="flex flex-col items-center gap-1.5 py-3 rounded-xl border border-slate-200 text-slate-500 hover:bg-slate-50 transition-all">
+<span class="material-symbols-outlined text-xl">directions_run</span>
+<span class="font-bold text-[10px] uppercase">Moving</span>
+</button>
+<button class="flex flex-col items-center gap-1.5 py-3 rounded-xl border border-slate-200 text-slate-500 hover:bg-slate-50 transition-all">
+<span class="material-symbols-outlined text-xl">category</span>
+<span class="font-bold text-[10px] uppercase">Any</span>
+</button>
+</div>
+</div>
+<!-- Toggles -->
+<div class="space-y-4 pt-2">
+<div class="flex items-center justify-between">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-slate-400 text-lg">volume_off</span>
+<span class="text-sm font-semibold text-slate-700">Quiet Mode</span>
+</div>
+<button class="w-10 h-5 bg-slate-200 rounded-full relative flex items-center px-1">
+<div class="w-3.5 h-3.5 bg-white rounded-full shadow-sm"></div>
+</button>
+</div>
+<div class="flex items-center justify-between">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-slate-400 text-lg">favorite</span>
+<span class="text-sm font-semibold text-slate-700">Prefer Favorites</span>
+</div>
+<button class="w-10 h-5 bg-primary rounded-full relative flex items-center justify-end px-1">
+<div class="w-3.5 h-3.5 bg-white rounded-full shadow-sm"></div>
+</button>
+</div>
+</div>
+</div>
+</div>
+<!-- Booking Card (Separate) -->
+<div class="p-5 rounded-2xl bg-white shadow-sm border border-slate-200 mt-auto">
+<div class="flex items-center gap-2 text-primary font-bold text-sm mb-1">
+<span class="material-symbols-outlined text-lg">event_available</span>
+                        1 Session Selected
+                    </div>
+<div class="text-xs text-slate-500 mb-4 leading-relaxed font-medium">
+                        April 10, 10:15am - 11:05am
+                    </div>
+<button class="w-full py-3.5 bg-primary text-white rounded-xl font-bold shadow-lg shadow-primary/20 active:scale-95 transition-transform">
+                        Book session
+                    </button>
+</div>
+</aside>
+<!-- 4. Center: Calendar (Focal Point) -->
+<section class="flex-1 bg-white overflow-hidden flex flex-col">
+<div class="p-6 flex items-center justify-between border-b border-surface-container">
+<div class="flex items-center gap-4">
+<h1 class="text-2xl font-bold text-primary">April 10 – 12</h1>
+<div class="flex bg-surface-container-low rounded-lg p-1">
+<button class="p-1 material-symbols-outlined text-slate-500 hover:text-primary">chevron_left</button>
+<button class="px-3 text-xs font-bold text-primary">Today</button>
+<button class="p-1 material-symbols-outlined text-slate-500 hover:text-primary">chevron_right</button>
+</div>
+</div>
+<div class="flex gap-2">
+<button class="px-4 py-1.5 text-xs font-bold rounded-full bg-surface-container text-slate-600">Day</button>
+<button class="px-4 py-1.5 text-xs font-bold rounded-full bg-primary text-white">3 Day</button>
+<button class="px-4 py-1.5 text-xs font-bold rounded-full bg-surface-container text-slate-600">Week</button>
+</div>
+</div>
+<div class="flex-1 overflow-y-auto hide-scrollbar relative">
+<!-- Grid Labels -->
+<div class="grid grid-cols-[60px_1fr_1fr_1fr] sticky top-0 bg-white z-10 border-b border-surface-container">
+<div class="h-12"></div>
+<div class="h-12 flex flex-col items-center justify-center border-l border-surface-container">
+<span class="text-[10px] font-bold text-slate-400 uppercase">Wed</span>
+<span class="text-lg font-bold text-primary">10</span>
+</div>
+<div class="h-12 flex flex-col items-center justify-center border-l border-surface-container bg-surface-container-low/30">
+<span class="text-[10px] font-bold text-slate-400 uppercase">Thu</span>
+<span class="text-lg font-bold text-primary">11</span>
+</div>
+<div class="h-12 flex flex-col items-center justify-center border-l border-surface-container">
+<span class="text-[10px] font-bold text-slate-400 uppercase">Fri</span>
+<span class="text-lg font-bold text-primary">12</span>
+</div>
+</div>
+<!-- Calendar Body -->
+<div class="grid grid-cols-[60px_1fr_1fr_1fr] relative">
+<!-- Hour Column -->
+<div class="border-r border-surface-container">
+<div class="h-20 text-[10px] font-bold text-slate-400 flex items-start justify-center pt-2">8 AM</div>
+<div class="h-20 text-[10px] font-bold text-slate-400 flex items-start justify-center pt-2">9 AM</div>
+<div class="h-20 text-[10px] font-bold text-slate-400 flex items-start justify-center pt-2">10 AM</div>
+<div class="h-20 text-[10px] font-bold text-slate-400 flex items-start justify-center pt-2">11 AM</div>
+<div class="h-20 text-[10px] font-bold text-slate-400 flex items-start justify-center pt-2">12 PM</div>
+<div class="h-20 text-[10px] font-bold text-slate-400 flex items-start justify-center pt-2">1 PM</div>
+<div class="h-20 text-[10px] font-bold text-slate-400 flex items-start justify-center pt-2">2 PM</div>
+<div class="h-20 text-[10px] font-bold text-slate-400 flex items-start justify-center pt-2">3 PM</div>
+<div class="h-20 text-[10px] font-bold text-slate-400 flex items-start justify-center pt-2">4 PM</div>
+</div>
+<!-- Days Columns -->
+<div class="border-r border-surface-container relative">
+<div class="absolute inset-0 grid grid-rows-9 divide-y divide-surface-container/50">
+<div class="h-20"></div><div class="h-20"></div><div class="h-20"></div><div class="h-20"></div><div class="h-20"></div><div class="h-20"></div><div class="h-20"></div><div class="h-20"></div><div class="h-20"></div>
+</div>
+<!-- Scheduled Slots Wed -->
+<div class="absolute top-[170px] left-1.5 right-1.5 h-16 bg-primary/10 border-l-4 border-primary rounded-r-lg p-2.5 z-20 flex flex-col justify-between shadow-sm">
+<span class="text-[10px] font-bold text-primary">My Session</span>
+<div class="flex -space-x-1.5">
+<img class="w-5 h-5 rounded-full border-2 border-white" data-alt="face of a smiling woman with a creative professional look" src="https://lh3.googleusercontent.com/aida-public/AB6AXuA4ahbmvxLTpVe27In5W0T09QOQdxbcxH2DfD_OfhHHtyiWylI44MB6Dn05KF4KRclp9U0QxsW9oaPDehk2aTgaJBHciwqV3jEKW2ogtu1IV68GRaJyF5fsl2RySaP1i_Zaikcld3TuIdPjskRCrWgN4i5qK3ZSsZs67QP9vj77DbKHWxNSVD3f0Z5YW3Or5Y8hlc9WYGuUVCFgl0Nmeov0kK610hFT9_yqqwxOHC2RK68TUitZNSwbhdnc3o2d0WOFSBqws_F9_eNa"/>
+<div class="w-5 h-5 rounded-full bg-slate-200 flex items-center justify-center text-[9px] font-bold border-2 border-white">2</div>
+</div>
+</div>
+</div>
+<div class="border-r border-surface-container relative bg-surface-container-low/20">
+<div class="absolute inset-0 grid grid-rows-9 divide-y divide-surface-container/50">
+<div class="h-20"></div><div class="h-20"></div><div class="h-20"></div><div class="h-20"></div><div class="h-20"></div><div class="h-20"></div><div class="h-20"></div><div class="h-20"></div><div class="h-20"></div>
+</div>
+<!-- Community Slot Thu -->
+<div class="absolute top-[80px] left-1.5 right-1.5 h-16 bg-white border border-slate-200 rounded-lg p-2.5 flex items-center justify-between shadow-sm">
+<div class="flex -space-x-2">
+<img class="w-7 h-7 rounded-full border-2 border-white" data-alt="close up of a professional man with glasses" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAH8eboME5goJDbn5h13YzfKHdNfNRijfTzwH8NMrMY-sWkahDYuWUgMZ58i-GnjrrzKtJ_Jk2Gd5NHdjpVSJ44CPfRWhYY7bqLOMTm4LWj1jZnnKFK-xq-RWFu4bm0mjEgn9XvWUvVKPw-hybRcOQF5vUOZZE103W_VYmov05QsGfhCPbXOmPQ7jc8N7aMLaD9nd3nUt74Uxb79TZQkOawyFXAQ4WnTIVbwZiHfcjgvlN2Q7UBFD67_ilv2_lKyyuKpU0odNpSGSMz"/>
+<img class="w-7 h-7 rounded-full border-2 border-white" data-alt="portrait of a focused female student" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBSq5Honi-3_D8fBE7Sy2FIMHfs3xzZBsl9QGtIVVTkAvq0OCeX5mrExH8x1bVk9FN_08QxslLELGCSCwprNKbH_4Ag76JHk9EhYHARlJvsotBb8CCwxxCXcvdqW51bBisx_B-E2bBcr42G2Ro5yCsoDBepDpWg1M473IbZVd8zofCkx0EJcbAT6c-7UQGfwPYwwtPw-iuhiwhgGCOmWPzvyUqQmLFhxL0xQDCnAXGPTR67hhLnUn_A0gKf0kw7LsF9Z40LKLA-kxCZ"/>
+</div>
+<span class="text-[10px] font-bold text-slate-500">2/3 Joined</span>
+</div>
+</div>
+<div class="relative">
+<div class="absolute inset-0 grid grid-rows-9 divide-y divide-surface-container/50">
+<div class="h-20"></div><div class="h-20"></div><div class="h-20"></div><div class="h-20"></div><div class="h-20"></div><div class="h-20"></div><div class="h-20"></div><div class="h-20"></div><div class="h-20"></div>
+</div>
+</div>
+</div>
+</div>
+</section>
+<!-- 3. Right Panel (Cohesive Card Structure) -->
+<aside class="w-80 bg-surface-container-low flex flex-col p-6 gap-6 overflow-y-auto">
+<div class="bg-white rounded-2xl border border-slate-200 overflow-hidden flex flex-col shadow-sm">
+<!-- Profile Info -->
+<div class="p-6 text-center border-b border-slate-50 bg-slate-50/30">
+<div class="relative inline-block mb-4">
+<img class="w-24 h-24 rounded-2xl object-cover mx-auto shadow-xl ring-4 ring-white" data-alt="high quality portrait of Mohamed, a professional male user" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDEo4M377gT21tIH-jSHhIU_WHxoXPpfEnIhLipchIHQthhWskPLBH-v3Ms4pzprG-PaRffGKcFyFdzRkd3Mw4JO3uTA93XvnFqxnEtFDYIES6VJ2H_kjYdRlaAg5mxtEAnH18tlbj6i26803UF00QdDjfsaJnMWkubzXrqLQEcO7a797Yyzypp-Qt7ucF9_GnpQQCvk_PCr08rSRw2E1qaKeNT_i3saAGRuy3RL8dbdIdbWVozJXvlzgaKWyAtNVekHMm4Q5_nSn6Q"/>
+<div class="absolute -bottom-1 -right-1 w-5 h-5 bg-green-500 border-2 border-white rounded-full"></div>
+</div>
+<h3 class="font-extrabold text-xl text-[#001945]">Mohamed</h3>
+<p class="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">Free Plan Subscriber</p>
+</div>
+<!-- Stats -->
+<div class="flex border-b border-slate-50">
+<div class="flex-1 p-4 text-center border-r border-slate-50">
+<span class="block text-xl font-bold text-primary">12</span>
+<span class="text-[9px] text-slate-400 font-bold uppercase">Sessions</span>
+</div>
+<div class="flex-1 p-4 text-center">
+<span class="block text-xl font-bold text-primary">84%</span>
+<span class="text-[9px] text-slate-400 font-bold uppercase">Streak</span>
+</div>
+</div>
+<!-- Actions Panel -->
+<div class="p-4 space-y-4">
+<button class="w-full py-3.5 bg-primary text-white rounded-xl font-bold text-sm shadow-lg shadow-primary/20 hover:brightness-110 transition-all">
+                            Upgrade to Plus
+                        </button>
+<nav class="space-y-1">
+<a class="flex items-center justify-between p-3 rounded-xl hover:bg-slate-50 transition-all group" href="#">
+<div class="flex items-center gap-3">
+<span class="material-symbols-outlined text-slate-400 group-hover:text-primary">event_note</span>
+<span class="text-sm font-semibold text-slate-600">My Schedule</span>
+</div>
+<span class="material-symbols-outlined text-slate-300 text-sm">chevron_right</span>
+</a>
+<a class="flex items-center justify-between p-3 rounded-xl hover:bg-slate-50 transition-all group" href="#">
+<div class="flex items-center gap-3">
+<span class="material-symbols-outlined text-slate-400 group-hover:text-primary">star</span>
+<span class="text-sm font-semibold text-slate-600">Favorites</span>
+</div>
+<span class="material-symbols-outlined text-slate-300 text-sm">chevron_right</span>
+</a>
+</nav>
+</div>
+</div>
+<!-- Bottom Helper Actions -->
+<div class="mt-auto space-y-1 pt-4">
+<button class="w-full flex items-center gap-3 px-3 py-2 text-xs font-semibold text-slate-500 hover:text-primary transition-colors">
+<span class="material-symbols-outlined text-lg">mic</span>
+                        Test audio &amp; video
+                    </button>
+<button class="w-full flex items-center gap-3 px-3 py-2 text-xs font-semibold text-slate-500 hover:text-primary transition-colors">
+<span class="material-symbols-outlined text-lg">chat_bubble</span>
+                        Share feedback
+                    </button>
+<button class="w-full flex items-center gap-3 px-3 py-2 text-xs font-semibold text-slate-500 hover:text-primary transition-colors">
+<span class="material-symbols-outlined text-lg">contact_support</span>
+                        Contact support
+                    </button>
+</div>
+</aside>
+</main>
+<footer class="bg-white border-t border-slate-100 px-8 py-3 flex justify-between items-center text-[10px] font-bold text-slate-400 uppercase tracking-tight shrink-0">
+<div>© 2024 CoFocus Digital Sanctuary</div>
+<div class="flex gap-6">
+<a class="hover:text-primary transition-colors" href="#">Privacy Policy</a>
+<a class="hover:text-primary transition-colors" href="#">Terms</a>
+<a class="hover:text-primary transition-colors" href="#">Contact</a>
+</div>
+</footer>
+</div>
+</body></html>

@@ -10,16 +10,17 @@ import {
   useTracks,
   RoomAudioRenderer,
 } from '@livekit/components-react';
-import { Track, RoomEvent } from 'livekit-client';
+import { Track } from 'livekit-client';
 import '@livekit/components-styles';
 
 import { SessionTimer } from '@/components/session/SessionTimer';
 import { ReflectionModal } from '@/components/session/ReflectionModal';
+import { cn } from '@focusUp/ui/lib/utils';
+import { Mic, MicOff, Video, VideoOff, Settings, X, HelpCircle, LogOut, Grid, Maximize, MessageSquare, MonitorUp, Star } from 'lucide-react';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000';
 const LIVEKIT_URL = process.env.NEXT_PUBLIC_LIVEKIT_URL || '';
 
-/** LiveKit Room Config — per AGENTS.md, do NOT change these presets */
 const roomConfig = {
   adaptiveStream: true,
   dynacast: true,
@@ -60,7 +61,6 @@ function GoalModal({
         return prev - 1;
       });
     }, 1000);
-
     return () => {
       if (timerRef.current) clearInterval(timerRef.current);
     };
@@ -79,27 +79,24 @@ function GoalModal({
       if (res.ok) {
         onGoalSet(goal.trim());
       }
-    } catch {
-      // Silently fail — goal is optional
-    }
+    } catch {}
     if (timerRef.current) clearInterval(timerRef.current);
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
-      <div className="mx-4 w-full max-w-md rounded-2xl border border-white/10 bg-zinc-900 p-6 shadow-2xl">
-        <h2 className="mb-1 text-lg font-semibold text-white">
+    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm animate-in fade-in">
+      <div className="mx-4 w-full max-w-md rounded-2xl bg-white p-8 shadow-2xl">
+        <h2 className="mb-2 text-xl font-bold text-slate-800">
           What&apos;s your focus goal for this session?
         </h2>
-        <p className="mb-4 text-sm text-zinc-400">
+        <p className="mb-5 text-sm font-medium text-slate-500">
           Setting a goal helps you stay focused and accountable.
         </p>
-
         <textarea
           value={goal}
           onChange={(e) => setGoal(e.target.value.slice(0, 200))}
           placeholder="e.g., Finish the API endpoints for user sessions..."
-          className="w-full resize-none rounded-lg border border-white/10 bg-zinc-800 px-4 py-3 text-sm text-white placeholder-zinc-500 outline-none transition focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
+          className="w-full resize-none rounded-xl border-2 border-slate-100 bg-slate-50 px-4 py-3 text-sm text-slate-800 placeholder-slate-400 outline-none transition focus:border-[#4A55C8] focus:bg-white"
           rows={3}
           autoFocus
           onKeyDown={(e) => {
@@ -109,18 +106,16 @@ function GoalModal({
             }
           }}
         />
-
         <div className="mt-2 flex items-center justify-between">
-          <span className="text-xs text-zinc-500">{goal.length}/200</span>
-          <span className="tabular-nums text-xs text-zinc-500">
+          <span className="text-xs font-semibold text-slate-400">{goal.length}/200</span>
+          <span className="tabular-nums text-xs font-bold text-slate-400">
             Auto-dismiss in {countdown}s
           </span>
         </div>
-
         <button
           onClick={handleSubmit}
           disabled={!goal.trim() || submitting}
-          className="mt-4 w-full rounded-lg bg-indigo-600 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-indigo-500 disabled:cursor-not-allowed disabled:opacity-50"
+          className="mt-6 w-full rounded-xl bg-[#4A55C8] px-4 py-3.5 text-sm font-bold tracking-wide text-white transition-all hover:brightness-110 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50"
         >
           {submitting ? 'Setting...' : 'Set Goal'}
         </button>
@@ -129,28 +124,7 @@ function GoalModal({
   );
 }
 
-// ── Goal Banner ───────────────────────────────────────────────────
-
-function GoalBanner({ myGoal, partnerGoal }: { myGoal: string | null; partnerGoal: string | null }) {
-  if (!myGoal && !partnerGoal) return null;
-
-  return (
-    <div className="absolute left-1/2 top-4 z-30 -translate-x-1/2 rounded-xl border border-white/10 bg-black/60 px-5 py-3 backdrop-blur-md">
-      {myGoal && (
-        <p className="text-sm text-white">
-          <span className="font-medium text-indigo-400">Your goal:</span> {myGoal}
-        </p>
-      )}
-      {partnerGoal && (
-        <p className="mt-1 text-sm text-white">
-          <span className="font-medium text-emerald-400">Partner&apos;s goal:</span> {partnerGoal}
-        </p>
-      )}
-    </div>
-  );
-}
-
-// ── Session UI (inside LiveKitRoom) ───────────────────────────────
+// ── Session UI ───────────────────────────────────────────────────
 
 function SessionUI({ sessionId }: { sessionId: string }) {
   const { localParticipant } = useLocalParticipant();
@@ -168,13 +142,10 @@ function SessionUI({ sessionId }: { sessionId: string }) {
   const [showGoalModal, setShowGoalModal] = useState(true);
   const [isMicOn, setIsMicOn] = useState(true);
   const [isCamOn, setIsCamOn] = useState(true);
-  
   const [sessionData, setSessionData] = useState<any>(null);
   const [showReflection, setShowReflection] = useState(false);
-
   const router = useRouter();
 
-  // Join session on mount
   useEffect(() => {
     fetch(`${API_URL}/api/v1/sessions/join/${sessionId}`, {
       method: 'PATCH',
@@ -182,7 +153,6 @@ function SessionUI({ sessionId }: { sessionId: string }) {
     }).catch(console.error);
   }, [sessionId]);
 
-  // Poll for status and goals
   useEffect(() => {
     const fetchStatus = async () => {
       try {
@@ -192,23 +162,15 @@ function SessionUI({ sessionId }: { sessionId: string }) {
         if (res.ok) {
           const { data } = await res.json();
           setSessionData(data.session);
-
-          // Find which user we are to correctly set partner/my goals
-          // Since we might not have our userId directly, we can check who we're NOT
-          // Simplification for MVP: backend returned the full session object. 
-          // But wait, the previous code polled for token. We just need to properly grab goals.
         }
-      } catch (e) {
-        // Ignore polling errors
-      }
+      } catch {}
     };
 
     fetchStatus();
-    const interval = setInterval(fetchStatus, 5000); // 5 sec interval for quicker join detection
+    const interval = setInterval(fetchStatus, 5000);
     return () => clearInterval(interval);
   }, [sessionId]);
 
-  // Separate local tracks from remote tracks
   const remoteCameraTracks = tracks.filter(
     (t) =>
       t.participant.identity !== localParticipant.identity &&
@@ -241,7 +203,6 @@ function SessionUI({ sessionId }: { sessionId: string }) {
       });
       setShowReflection(true);
     } catch {
-      // Show reflection anyway
       setShowReflection(true);
     }
   }, [sessionId]);
@@ -265,157 +226,219 @@ function SessionUI({ sessionId }: { sessionId: string }) {
   };
 
   return (
-    <div className="relative h-full w-full bg-zinc-950">
-      {/* Goal Banner */}
-      <GoalBanner myGoal={myGoal} partnerGoal={partnerGoal} />
+    <div className="flex h-screen w-screen flex-col overflow-hidden bg-[#0b1219] text-white selection:bg-[#0245a3] font-sans">
+      {/* Notice Banner */}
+      {myGoal || partnerGoal ? (
+        <div className="relative z-50 flex items-center justify-center gap-2 bg-[#414199] px-4 py-1.5 text-center text-xs font-medium text-white shadow-sm">
+          {myGoal && <span>🎯 Your goal: {myGoal}</span>}
+          {myGoal && partnerGoal && <span className="mx-2 opacity-50">|</span>}
+          {partnerGoal && <span>🤝 Partner: {partnerGoal}</span>}
+        </div>
+      ) : null}
 
-      {/* Timer placeholder - top center */}
-      <div className="absolute left-1/2 top-4 z-20 -translate-x-1/2 flex h-10 items-center rounded-full border border-white/10 bg-black/60 px-5 text-xl font-medium tracking-wider backdrop-blur-md">
-        {sessionData ? (
-          <SessionTimer
-            durationMin={sessionData.durationMin}
-            startedAt={sessionData.startedAt}
-            onTimeUp={() => completeSession()}
-          />
-        ) : (
-          <span className="font-mono text-white">--:--</span>
-        )}
-      </div>
-
-      {/* Partner video — main area */}
-      <div className="flex h-full w-full items-center justify-center">
-        {remoteCameraTracks.length > 0 ? (
-          <VideoTrack
-            trackRef={remoteCameraTracks[0]}
-            className="h-full w-full object-cover"
-          />
-        ) : (
-          <div className="flex flex-col items-center gap-3 text-zinc-500">
-            <div className="flex h-24 w-24 items-center justify-center rounded-full bg-zinc-800">
-              <svg className="h-12 w-12" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 6a3.75 3.75 0 1 1-7.5 0 3.75 3.75 0 0 1 7.5 0ZM4.501 20.118a7.5 7.5 0 0 1 14.998 0" />
-              </svg>
+      <div className="relative flex flex-1 overflow-hidden lg:grid lg:grid-cols-[240px_1fr_240px] xl:grid-cols-[280px_1fr_280px]">
+        {/* ── Left Column (Self View & Info) ── */}
+        <aside className="z-20 hidden flex-col gap-6 bg-[#0b1219] p-4 lg:flex border-r border-white/5">
+          {/* Partner Info Box */}
+          <div className="flex items-center gap-3 rounded-xl bg-white p-3 shadow-lg">
+            <div className="h-10 w-10 shrink-0 overflow-hidden rounded-full bg-slate-200">
+              <img src="https://i.pravatar.cc/150?u=partner" alt="Partner" className="h-full w-full object-cover" />
             </div>
-            <p className="text-sm">
-              {remoteParticipants.length === 0
-                ? 'Waiting for partner to join...'
-                : "Partner's camera is off"}
-            </p>
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center justify-between">
+                <span className="truncate text-sm font-bold text-slate-900">Partner</span>
+                <Star className="h-4 w-4 text-slate-300" />
+              </div>
+              <p className="text-[11px] font-semibold text-slate-500">CoFocus Session</p>
+            </div>
           </div>
-        )}
-      </div>
-
-      {/* Self video — picture-in-picture */}
-      <div className="absolute bottom-20 right-4 z-20 h-36 w-48 overflow-hidden rounded-lg border-2 border-white/20 bg-zinc-900 shadow-xl">
-        {localCameraTrack?.publication?.track ? (
-          <VideoTrack
-            trackRef={localCameraTrack}
-            className="h-full w-full object-cover"
-            style={{ transform: 'scaleX(-1)' }}
-          />
-        ) : (
-          <div className="flex h-full w-full items-center justify-center text-xs text-zinc-500">
-            Camera off
+          
+          {/* Status */}
+          <div className="flex items-center gap-2 px-1 text-white/80">
+            <Settings className="h-[18px] w-[18px]" />
+            <span className="text-xs font-semibold">{remoteParticipants.length + 1} people in call</span>
           </div>
-        )}
+
+          {/* Self View (PIP) */}
+          <div className="group relative aspect-video w-full overflow-hidden rounded-xl border border-white/10 bg-black/50 shadow-md">
+            {localCameraTrack?.publication?.track ? (
+              <VideoTrack trackRef={localCameraTrack} className="h-full w-full object-cover" style={{ transform: 'scaleX(-1)' }} />
+            ) : (
+              <div className="flex h-full w-full items-center justify-center bg-zinc-900 text-xs font-medium text-zinc-500">
+                Camera off
+              </div>
+            )}
+            <button className="absolute left-1.5 top-1.5 rounded-md bg-black/40 p-1 opacity-0 transition-opacity group-hover:opacity-100">
+              <Maximize className="h-3.5 w-3.5 text-white" />
+            </button>
+            <div className="absolute bottom-1.5 left-1.5 flex items-center gap-1.5 rounded-md bg-black/60 px-2 py-1 text-[10px] font-semibold text-white backdrop-blur-sm">
+              {isMicOn ? <Mic className="h-3 w-3" /> : <MicOff className="h-3 w-3 text-red-400" />}
+              <span>You</span>
+            </div>
+          </div>
+        </aside>
+
+        {/* ── Middle Column (Partner View) ── */}
+        <main className="flex flex-1 items-center justify-center bg-[#0b1219] p-4">
+          <div className="relative aspect-video w-full max-w-5xl overflow-hidden rounded-[20px] bg-black shadow-2xl ring-1 ring-white/5">
+            {remoteCameraTracks.length > 0 ? (
+              <VideoTrack trackRef={remoteCameraTracks[0]} className="h-full w-full object-cover" />
+            ) : (
+              <div className="flex h-full w-full flex-col items-center justify-center gap-4 bg-zinc-900 text-zinc-500">
+                <div className="flex h-20 w-20 items-center justify-center rounded-full bg-zinc-800 shadow-inner">
+                  <VideoOff className="h-8 w-8 text-zinc-600" />
+                </div>
+                <p className="text-sm font-semibold tracking-wide text-zinc-400">
+                  {remoteParticipants.length === 0 ? 'Waiting for partner...' : "Partner's camera is off"}
+                </p>
+              </div>
+            )}
+            
+            {/* Mobile overlays when columns are hidden */}
+            <div className="absolute bottom-4 right-4 lg:hidden">
+               <div className="aspect-video w-24 overflow-hidden rounded-lg border-2 border-white/20 bg-black/50 shadow-lg">
+                  {localCameraTrack?.publication?.track ? <VideoTrack trackRef={localCameraTrack} className="h-full w-full object-cover" style={{ transform: 'scaleX(-1)' }} /> : null}
+               </div>
+            </div>
+            {sessionData && (
+              <div className="absolute top-4 left-1/2 -translate-x-1/2 rounded-full border border-white/10 bg-black/60 px-4 py-1.5 font-mono text-sm font-bold tracking-widest text-white backdrop-blur-md lg:hidden">
+                 <SessionTimer durationMin={sessionData.durationMin} startedAt={sessionData.startedAt} onTimeUp={completeSession} />
+              </div>
+            )}
+          </div>
+        </main>
+
+        {/* ── Right Column (Timer & Chat) ── */}
+        <aside className="z-20 hidden flex-col bg-[#0b1219] lg:flex border-l border-white/5">
+          {/* Header Controls */}
+          <div className="flex flex-col gap-4 p-4">
+            <div className="flex h-16 items-stretch overflow-hidden rounded-xl bg-white shadow-lg">
+              <div className="flex flex-1 flex-col items-center justify-center border-r border-slate-100 bg-slate-50 px-2 text-slate-800">
+                <span className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">Time Left</span>
+                {sessionData ? (
+                  <div className="text-xl font-black tabular-nums tracking-tight">
+                    <SessionTimer durationMin={sessionData.durationMin} startedAt={sessionData.startedAt} onTimeUp={completeSession} />
+                  </div>
+                ) : (
+                  <span className="text-xl font-black tabular-nums tracking-tight text-slate-300">--:--</span>
+                )}
+              </div>
+              <button className="group flex flex-col items-center justify-center px-4 transition-colors hover:bg-slate-50">
+                <HelpCircle className="mb-0.5 h-5 w-5 text-[#4A55C8] transition-transform group-hover:scale-110" />
+                <span className="text-[10px] font-bold text-[#4A55C8]">Help</span>
+              </button>
+              <button onClick={leaveSession} className="group flex flex-col items-center justify-center border-l border-slate-100 px-4 transition-colors hover:bg-red-50">
+                <LogOut className="mb-0.5 h-5 w-5 text-red-500 transition-transform group-hover:scale-110" />
+                <span className="text-[10px] font-bold text-red-500">Leave</span>
+              </button>
+            </div>
+            
+            <div className="flex items-center justify-end gap-3 text-white/60 mt-1">
+              <span className="text-[10px] font-bold uppercase tracking-widest">Speaker View</span>
+              <div className="flex rounded-lg bg-white/10 p-1">
+                <button className="rounded bg-[#4A55C8] p-1.5 text-white shadow-sm"><MaximizedIcon /></button>
+                <button className="p-1.5 transition-colors hover:text-white"><Grid className="h-[14px] w-[14px]" /></button>
+              </div>
+            </div>
+          </div>
+
+          {/* Chat Section */}
+          <div className="mx-4 mb-4 flex flex-1 flex-col overflow-hidden rounded-2xl border border-white/10 bg-white/5">
+            <div className="flex items-center justify-between border-b border-white/10 p-4 bg-white/5">
+              <span className="text-xs font-bold text-white tracking-widest uppercase">Chat</span>
+              <ChevronDownIcon className="h-4 w-4 text-white/40" />
+            </div>
+            <div className="flex-1 space-y-4 overflow-y-auto p-4 custom-scrollbar">
+               {/* Empty state for realism */}
+               <div className="flex h-full flex-col items-center justify-center opacity-40">
+                  <MessageSquare className="h-8 w-8 mb-2" />
+                  <span className="text-xs font-semibold">No messages yet</span>
+               </div>
+            </div>
+            <div className="p-3 border-t border-white/5 bg-white/5">
+              <div className="flex items-center rounded-xl bg-black/40 px-3 py-2 border border-white/10 focus-within:border-[#4A55C8] transition-colors">
+                <input type="text" placeholder="Type a message..." className="w-full bg-transparent p-0 text-xs font-medium text-white placeholder-white/40 outline-none border-none focus:ring-0" />
+              </div>
+            </div>
+          </div>
+        </aside>
       </div>
 
-      {/* Control bar — bottom center */}
-      <div className="absolute bottom-4 left-1/2 z-30 flex -translate-x-1/2 items-center gap-3 rounded-full bg-black/80 px-6 py-3 backdrop-blur-md">
-        {/* Mic toggle */}
-        <button
-          onClick={toggleMic}
-          className={`flex h-11 w-11 items-center justify-center rounded-full transition ${
-            isMicOn
-              ? 'bg-zinc-700 text-white hover:bg-zinc-600'
-              : 'bg-red-600 text-white hover:bg-red-500'
-          }`}
-          title={isMicOn ? 'Mute microphone' : 'Unmute microphone'}
-        >
-          {isMicOn ? (
-            <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M12 18.75a6 6 0 0 0 6-6v-1.5m-6 7.5a6 6 0 0 1-6-6v-1.5m6 7.5v3.75m-3.75 0h7.5M12 15.75a3 3 0 0 1-3-3V4.5a3 3 0 1 1 6 0v8.25a3 3 0 0 1-3 3Z" />
-            </svg>
-          ) : (
-            <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="m3 3 18 18M12 18.75a6 6 0 0 0 5.932-5.088M15 9.75V4.5a3 3 0 1 0-6 0v5.25m0 0V12a3 3 0 0 0 3 3m-3-5.25h6" />
-            </svg>
-          )}
-        </button>
+      {/* ── Bottom Navigation Bar ── */}
+      <nav className="relative z-50 flex h-[88px] shrink-0 items-center justify-center border-t border-white/5 bg-[#0b1219]">
+        <div className="flex items-center gap-8 md:gap-12">
+          {/* Vid */}
+          <button onClick={toggleCam} className="group flex flex-col items-center transition-transform hover:scale-105 active:scale-95">
+            <div className={cn("flex h-12 w-12 items-center justify-center rounded-2xl transition-all shadow-sm", isCamOn ? "bg-zinc-800 text-white group-hover:bg-zinc-700" : "bg-red-500 text-white group-hover:bg-red-400")}>
+              {isCamOn ? <Video className="h-[22px] w-[22px]" /> : <VideoOff className="h-[22px] w-[22px]" /> }
+            </div>
+            <span className="mt-1.5 text-[10px] font-bold uppercase tracking-wider text-white/60 group-hover:text-white">
+              {isCamOn ? 'Turn off' : 'Turn on'}
+            </span>
+          </button>
+          
+          {/* Mic */}
+          <button onClick={toggleMic} className="group flex flex-col items-center transition-transform hover:scale-105 active:scale-95">
+            <div className={cn("flex h-12 w-12 items-center justify-center rounded-2xl transition-all shadow-sm", isMicOn ? "bg-zinc-800 text-white group-hover:bg-zinc-700" : "bg-red-500 text-white group-hover:bg-red-400")}>
+               {isMicOn ? <Mic className="h-[22px] w-[22px]" /> : <MicOff className="h-[22px] w-[22px]" /> }
+            </div>
+            <span className="mt-1.5 text-[10px] font-bold uppercase tracking-wider text-white/60 group-hover:text-white">
+              {isMicOn ? 'Mute' : 'Unmute'}
+            </span>
+          </button>
+          
+          {/* Chat (Mobile only toggle) - just visual */}
+          <button className="group flex flex-col items-center transition-transform lg:hidden hover:scale-105 active:scale-95">
+            <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-zinc-800 text-white transition-colors group-hover:bg-zinc-700 shadow-sm">
+               <MessageSquare className="h-[20px] w-[20px]" />
+            </div>
+            <span className="mt-1.5 text-[10px] font-bold uppercase tracking-wider text-white">Chat</span>
+          </button>
 
-        {/* Camera toggle */}
-        <button
-          onClick={toggleCam}
-          className={`flex h-11 w-11 items-center justify-center rounded-full transition ${
-            isCamOn
-              ? 'bg-zinc-700 text-white hover:bg-zinc-600'
-              : 'bg-red-600 text-white hover:bg-red-500'
-          }`}
-          title={isCamOn ? 'Turn off camera' : 'Turn on camera'}
-        >
-          {isCamOn ? (
-            <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="m15.75 10.5 4.72-4.72a.75.75 0 0 1 1.28.53v11.38a.75.75 0 0 1-1.28.53l-4.72-4.72M4.5 18.75h9a2.25 2.25 0 0 0 2.25-2.25v-9a2.25 2.25 0 0 0-2.25-2.25h-9A2.25 2.25 0 0 0 2.25 7.5v9a2.25 2.25 0 0 0 2.25 2.25Z" />
-            </svg>
-          ) : (
-            <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="m15.75 10.5 4.72-4.72a.75.75 0 0 1 1.28.53v11.38a.75.75 0 0 1-1.28.53l-4.72-4.72M12 18.75H4.5a2.25 2.25 0 0 1-2.25-2.25V9m12.841 9.091L16.5 19.5m-1.409-.409 4.72 4.72m-4.72-4.72-4.72 4.72M3 3l18 18" />
-            </svg>
-          )}
-        </button>
+          {/* Share */}
+          <button className="group flex flex-col items-center transition-transform hover:scale-105 active:scale-95">
+            <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-zinc-800 text-white/70 transition-colors group-hover:bg-zinc-700 group-hover:text-white shadow-sm">
+               <MonitorUp className="h-[20px] w-[20px]" />
+            </div>
+            <span className="mt-1.5 text-[10px] font-bold uppercase tracking-wider text-white/60 group-hover:text-white">Share</span>
+          </button>
+          
+          {/* Leave (Mobile only) */}
+          <button onClick={leaveSession} className="group flex flex-col items-center transition-transform lg:hidden hover:scale-105 active:scale-95">
+            <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-red-500 text-white transition-colors group-hover:bg-red-600 shadow-sm">
+               <LogOut className="h-[20px] w-[20px]" />
+            </div>
+            <span className="mt-1.5 text-[10px] font-bold uppercase tracking-wider text-red-500">Leave</span>
+          </button>
+        </div>
+        
+        {/* Right Nav */}
+        <div className="absolute right-8 hidden items-center md:flex">
+          <button className="rounded-xl p-3 text-white/60 transition-colors hover:bg-white/10 hover:text-white">
+            <Settings className="h-5 w-5" />
+          </button>
+        </div>
+      </nav>
 
-        {/* Report button (placeholder) */}
-        <button
-          className="flex h-11 w-11 items-center justify-center rounded-full bg-zinc-700 text-zinc-400 transition hover:bg-zinc-600 hover:text-amber-400"
-          title="Report"
-        >
-          <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M3 3v1.5M3 21v-6m0 0 2.77-.693a9 9 0 0 1 6.208.682l.108.054a9 9 0 0 0 6.086.71l3.114-.732a48.524 48.524 0 0 1-.005-10.499l-3.11.732a9 9 0 0 1-6.085-.711l-.108-.054a9 9 0 0 0-6.208-.682L3 4.5M3 15V4.5" />
-          </svg>
-        </button>
-
-        {/* Leave session */}
-        <button
-          onClick={leaveSession}
-          className="flex h-11 items-center gap-2 rounded-full bg-red-600 px-5 text-sm font-medium text-white transition hover:bg-red-500"
-          title="Leave session"
-        >
-          <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 9V5.25A2.25 2.25 0 0 0 13.5 3h-6a2.25 2.25 0 0 0-2.25 2.25v13.5A2.25 2.25 0 0 0 7.5 21h6a2.25 2.25 0 0 0 2.25-2.25V15m3 0 3-3m0 0-3-3m3 3H9" />
-          </svg>
-          Leave
-        </button>
-      </div>
-
-      {/* Audio renderer for remote participants */}
+      {/* Audio & Modals */}
       <RoomAudioRenderer />
-
-      {/* Goal Modal — shown on entry, auto-dismissed after 15s */}
       {showGoalModal && !showReflection && (
-        <GoalModal
-          sessionId={sessionId}
-          onGoalSet={(g) => {
-            setMyGoal(g);
-            setShowGoalModal(false);
-          }}
-          onDismiss={() => setShowGoalModal(false)}
-        />
+        <GoalModal sessionId={sessionId} onGoalSet={(g) => { setMyGoal(g); setShowGoalModal(false); }} onDismiss={() => setShowGoalModal(false)} />
       )}
-
-      {/* Reflection Modal — shown on completion */}
       {showReflection && (
-        <ReflectionModal
-          sessionId={sessionId}
-          onSaveConfig={saveReflection}
-          onSkip={() => router.push('/dashboard')}
-          onSaveSuccess={() => router.push('/dashboard')}
-        />
+        <ReflectionModal sessionId={sessionId} onSaveConfig={saveReflection} onSkip={() => router.push('/dashboard')} onSaveSuccess={() => router.push('/dashboard')} />
       )}
+      
+      {/* Scrollbar style */}
+      <style dangerouslySetInnerHTML={{__html: `
+        .custom-scrollbar::-webkit-scrollbar { width: 4px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 4px; }
+        .custom-scrollbar:hover::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.2); }
+      `}} />
     </div>
   );
 }
-
-// ── Session Room (token fetcher + LiveKitRoom wrapper) ────────────
 
 function SessionRoom({ sessionId }: { sessionId: string }) {
   const [token, setToken] = useState<string | null>(null);
@@ -426,61 +449,41 @@ function SessionRoom({ sessionId }: { sessionId: string }) {
   useEffect(() => {
     const fetchToken = async () => {
       try {
-        const res = await fetch(`${API_URL}/api/v1/sessions/token/${sessionId}`, {
-          credentials: 'include',
-        });
-
+        const res = await fetch(`${API_URL}/api/v1/sessions/token/${sessionId}`, { credentials: 'include' });
         if (!res.ok) {
           const data = await res.json();
-          if (res.status === 403) {
-            setError(data.error || 'Not a participant');
-          } else if (res.status === 404) {
-            setError('Session not found');
-          } else if (res.status === 401) {
-            router.push('/login');
-            return;
-          } else {
-            setError(data.error || 'Failed to join session');
-          }
+          if (res.status === 401) return router.push('/login');
+          setError(data.error || 'Failed to join session');
           return;
         }
-
         const data = await res.json();
         setToken(data.data.token);
       } catch {
         setError('Failed to connect to server');
       }
     };
-
     fetchToken();
   }, [sessionId, router]);
 
-  // Error state
   if (error) {
     return (
-      <div className="flex h-full flex-col items-center justify-center gap-4 bg-zinc-950 text-white">
-        <div className="flex h-16 w-16 items-center justify-center rounded-full bg-red-900/30">
-          <svg className="h-8 w-8 text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m9-.75a9 9 0 1 1-18 0 9 9 0 0 1 18 0Zm-9 3.75h.008v.008H12v-.008Z" />
-          </svg>
+      <div className="flex h-screen flex-col items-center justify-center gap-5 bg-[#0b1219] text-white">
+        <div className="flex h-20 w-20 items-center justify-center rounded-full bg-red-500/20 shadow-lg shadow-red-500/10">
+          <X className="h-10 w-10 text-red-500" />
         </div>
-        <h2 className="text-lg font-semibold">{error}</h2>
-        <button
-          onClick={() => router.push('/dashboard')}
-          className="rounded-lg bg-zinc-800 px-6 py-2.5 text-sm font-medium transition hover:bg-zinc-700"
-        >
+        <h2 className="text-xl font-bold tracking-tight">{error}</h2>
+        <button onClick={() => router.push('/dashboard')} className="mt-2 rounded-xl bg-white px-6 py-3 font-bold text-slate-900 transition-all hover:bg-slate-200 active:scale-95">
           Back to Dashboard
         </button>
       </div>
     );
   }
 
-  // Loading state
   if (!token) {
     return (
-      <div className="flex h-full flex-col items-center justify-center gap-4 bg-zinc-950 text-white">
-        <div className="h-10 w-10 animate-spin rounded-full border-4 border-zinc-700 border-t-indigo-500" />
-        <p className="text-sm text-zinc-400">Connecting to session...</p>
+      <div className="flex h-screen flex-col items-center justify-center gap-5 bg-[#0b1219] text-white">
+        <div className="h-12 w-12 animate-spin rounded-full border-4 border-white/10 border-t-[#4A55C8] shadow-lg shadow-[#4A55C8]/20" />
+        <p className="font-semibold text-white/60 tracking-wider uppercase text-sm">Connecting...</p>
       </div>
     );
   }
@@ -496,13 +499,11 @@ function SessionRoom({ sessionId }: { sessionId: string }) {
       className="relative h-full w-full"
     >
       <SessionUI sessionId={sessionId} />
-
-      {/* Reconnecting overlay */}
       {isReconnecting && (
-        <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm">
-          <div className="flex flex-col items-center gap-3">
-            <div className="h-8 w-8 animate-spin rounded-full border-4 border-zinc-600 border-t-indigo-400" />
-            <p className="text-sm font-medium text-white">Reconnecting...</p>
+        <div className="absolute inset-0 z-[200] flex items-center justify-center bg-[#0b1219]/90 backdrop-blur-md">
+          <div className="flex flex-col items-center gap-4">
+            <div className="h-12 w-12 animate-spin rounded-full border-4 border-white/10 border-t-[#4A55C8]" />
+            <p className="font-bold text-white tracking-widest uppercase">Reconnecting...</p>
           </div>
         </div>
       )}
@@ -510,15 +511,20 @@ function SessionRoom({ sessionId }: { sessionId: string }) {
   );
 }
 
-// ── Page Component ────────────────────────────────────────────────
-
 export default function SessionPage() {
   const params = useParams();
   const sessionId = params.id as string;
-
   return (
-    <div className="h-svh w-full overflow-hidden">
+    <div className="h-svh w-full overflow-hidden bg-[#0b1219] animate-in fade-in duration-500">
       <SessionRoom sessionId={sessionId} />
     </div>
   );
 }
+
+// Helpers for icons
+const MaximizedIcon = () => (
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect></svg>
+);
+const ChevronDownIcon = ({ className }: { className?: string }) => (
+  <svg className={className} width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+);

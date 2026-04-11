@@ -126,5 +126,36 @@ export class SessionsController {
       next(error);
     }
   }
+
+  /**
+   * GET /api/v1/sessions/upcoming
+   */
+  static async getUpcoming(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      if (!req.user) throw new AppError('Not authenticated', 401);
+
+      const sessions = await SessionsService.getUpcomingSessions(req.user.id);
+      res.status(200).json({ data: sessions, statusCode: 200 });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * GET /api/v1/sessions/history
+   */
+  static async getHistory(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      if (!req.user) throw new AppError('Not authenticated', 401);
+
+      const page = parseInt(req.query.page as string) || 1;
+      const limit = parseInt(req.query.limit as string) || 10;
+
+      const result = await SessionsService.getSessionHistory(req.user.id, page, limit);
+      res.status(200).json({ ...result, statusCode: 200 });
+    } catch (error) {
+      next(error);
+    }
+  }
 }
 

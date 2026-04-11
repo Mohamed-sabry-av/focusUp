@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            "colors": {
+                    "surface-variant": "#e5e2e1",
+                    "on-surface-variant": "#434652",
+                    "tertiary": "#003b3f",
+                    "on-tertiary-container": "#91c4c8",
+                    "secondary-fixed": "#d3e4ff",
+                    "on-secondary": "#ffffff",
+                    "inverse-surface": "#313030",
+                    "on-error": "#ffffff",
+                    "on-background": "#1c1b1b",
+                    "surface": "#fcf9f8",
+                    "on-primary-container": "#9eb9ff",
+                    "inverse-primary": "#b0c6ff",
+                    "tertiary-fixed-dim": "#9ccfd4",
+                    "secondary": "#336094",
+                    "surface-container": "#f0edec",
+                    "secondary-container": "#99c4fd",
+                    "surface-tint": "#295ab8",
+                    "primary-fixed": "#d9e2ff",
+                    "on-primary": "#ffffff",
+                    "on-surface": "#1c1b1b",
+                    "on-secondary-container": "#205083",
+                    "background": "#fcf9f8",
+                    "inverse-on-surface": "#f3f0ef",
+                    "primary-container": "#0245a3",
+                    "on-secondary-fixed-variant": "#14487a",
+                    "tertiary-container": "#1d5256",
+                    "surface-container-high": "#ebe7e7",
+                    "on-secondary-fixed": "#001c38",
+                    "on-primary-fixed": "#001945",
+                    "surface-container-low": "#f6f3f2",
+                    "error": "#ba1a1a",
+                    "surface-container-lowest": "#ffffff",
+                    "on-tertiary": "#ffffff",
+                    "on-primary-fixed-variant": "#00419c",
+                    "surface-bright": "#fcf9f8",
+                    "secondary-fixed-dim": "#a2c9ff",
+                    "primary": "#003076",
+                    "tertiary-fixed": "#b8ecf1",
+                    "surface-dim": "#dcd9d9",
+                    "outline-variant": "#c3c6d4",
+                    "outline": "#737784",
+                    "primary-fixed-dim": "#b0c6ff",
+                    "on-tertiary-fixed": "#002022",
+                    "surface-container-highest": "#e5e2e1",
+                    "on-error-container": "#93000a",
+                    "error-container": "#ffdad6",
+                    "on-tertiary-fixed-variant": "#184e52"
+            },
+            "borderRadius": {
+                    "DEFAULT": "0.125rem",
+                    "lg": "0.25rem",
+                    "xl": "0.5rem",
+                    "full": "0.75rem"
+            },
+            "fontFamily": {
+                    "headline": ["Inter"],
+                    "body": ["Inter"],
+                    "label": ["Inter"]
+            }
+          },
+        },
+      }
+    </script>
+<style>
+        body { font-family: 'Inter', sans-serif; }
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+            vertical-align: middle;
+        }
+        .glass {
+            background: rgba(28, 27, 27, 0.4);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+        }
+        .video-container {
+            aspect-ratio: 16/9;
+        }
+    </style>
+</head>
+<body class="bg-[#0b1219] text-on-primary-fixed selection:bg-primary-container overflow-hidden h-screen w-screen flex flex-col">
+<!-- Top Bar Notice -->
+<div class="bg-[#414199] text-white py-1.5 px-4 text-center text-xs font-medium flex justify-center items-center gap-2 relative z-50">
+<span>🌟 Favorites are here! 🌟</span>
+<a class="underline font-bold" href="#">Explore Favorites</a>
+<button class="absolute right-4 text-white/80 hover:text-white">
+<span class="material-symbols-outlined text-[16px]">close</span>
+</button>
+</div>
+<!-- Main Content Grid -->
+<div class="flex-1 grid grid-cols-[240px_1fr_240px] gap-0 overflow-hidden relative">
+<!-- Left Column: Participants & Self View -->
+<aside class="p-4 flex flex-col gap-6 bg-[#0b1219] z-20">
+<!-- Partner Card -->
+<div class="bg-white rounded-lg p-3 flex items-center gap-3 shadow-lg">
+<div class="w-10 h-10 rounded-full overflow-hidden flex-shrink-0">
+<img class="w-full h-full object-cover" data-alt="Ilse portrait" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDDE1sLBDtTfJqzn7vtV7hNHOnjSBNsighl5lXwA_t3SCfgc1OLtVP3hwEt1k_ld34MwT-X0_0dAmwmvUf7n635lCM4CHOxqpzzBhJnbF3vJN93GSFZVB7vImHFd_XaADwoluBbAKoJFBw9YNLolEZILqukrMd1XPKZtx52_kHWBsRPDtrvcRys0wqIRRuWlPQdzIJ21h0w1DWANUNxkbiKyoclbuO53fKrDBs5ZV-Q3hp3w7aU5mXafAHx9hA4eigAKA5Ru_G1a0eL"/>
+</div>
+<div class="flex-1 min-w-0">
+<div class="flex items-center justify-between">
+<span class="text-gray-900 font-bold text-sm truncate">Ilse</span>
+<span class="material-symbols-outlined text-gray-400 text-lg">star</span>
+</div>
+<p class="text-gray-500 text-[11px]">98 sessions</p>
+</div>
+</div>
+<!-- Participant Count -->
+<div class="flex items-center gap-2 text-white/80 px-1">
+<span class="material-symbols-outlined text-[18px]">settings</span>
+<span class="text-xs font-medium">2 people in call</span>
+</div>
+<!-- Self View (PIP) -->
+<div class="relative w-full aspect-video rounded-lg overflow-hidden border border-white/10 group">
+<img class="w-full h-full object-cover" data-alt="Self portrait" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBR64HJeXHO_HggFb6OzoWLEc2Ufyun2SfCB9rIGya9WVhyVSJZKC2mHFCpsd2WGvz29Q8UaN49q1wYj6o_PvgxXQ-oxFpWe1dm1VUHm-u0_SHvh7DXvIUq2L_oSvOcuZ9XxcxKJmVHPrZ7VS8ZQ3DACiDY0XuNdhmKuDTcN80V39BVOa5ZhEWvK5d8Y2O9rOVQ8s4Kn82HoDzMPFvhV9ZEh7SbD_HEflQnd34tS2PKymKkYc1Be8LJcGHlvogG6O4nYJW8Q3Vsp8Il"/>
+<button class="absolute top-1 left-1 p-1 bg-black/40 rounded-md opacity-0 group-hover:opacity-100 transition-opacity">
+<span class="material-symbols-outlined text-white text-[14px]">open_in_full</span>
+</button>
+<div class="absolute bottom-1 left-1 flex items-center gap-1 bg-black/60 px-1.5 py-0.5 rounded text-[10px] text-white">
+<span class="material-symbols-outlined text-[12px]">mic</span>
+<span>Peter M. (You)</span>
+</div>
+</div>
+</aside>
+<!-- Middle Column: Main Video -->
+<main class="flex items-center justify-center p-4 bg-[#0b1219]">
+<div class="w-full max-w-5xl video-container relative rounded-lg overflow-hidden bg-black shadow-2xl">
+<img class="w-full h-full object-cover opacity-80" data-alt="Main video participant" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBPlqitbamKqx2Rc2CG_rnXEGS5PoRznIwDoXbDKmoaIY-Wzvq3DXscNIE3LYJbTB_t6tZJlY2hlas2sMb2bzEysEyOslDKpxmcZdePWimr2kNVFkTNkljFNdAUJflo7MX8zRapDiff1ABx5HoWIuncNp4_0PPFi0uUIk6HWhn9g8jNOROxwtRa20tW5BPQRnfFYE00Saen2-JCtpBuW7IiKuL7NXkaXyVXMDXxzhhGZGVcJbBuCYsT01-nak-LsKjRNDPoQ2hOvjLt"/>
+</div>
+</main>
+<!-- Right Column: Header, Layout & Chat -->
+<aside class="flex flex-col bg-[#0b1219] z-20">
+<!-- Header Controls -->
+<div class="p-4 flex flex-col gap-4">
+<div class="bg-white rounded-lg flex items-stretch overflow-hidden shadow-lg h-14">
+<div class="flex-1 flex flex-col items-center justify-center border-r border-gray-100 px-2">
+<span class="text-[9px] uppercase font-bold text-gray-400">Ends in</span>
+<span class="text-xl font-bold text-gray-900 leading-tight">22:38</span>
+</div>
+<button class="flex flex-col items-center justify-center px-3 hover:bg-gray-50 transition-colors">
+<span class="material-symbols-outlined text-primary text-[20px]">help</span>
+<span class="text-[10px] font-bold text-primary">Help</span>
+</button>
+<button class="flex flex-col items-center justify-center px-3 hover:bg-gray-50 transition-colors border-l border-gray-100">
+<span class="material-symbols-outlined text-primary text-[20px]">logout</span>
+<span class="text-[10px] font-bold text-primary">Leave</span>
+</button>
+</div>
+<div class="flex items-center justify-end gap-2 text-white/60">
+<span class="text-[11px] font-medium uppercase tracking-tight">Speaker view</span>
+<div class="flex bg-white/10 rounded-md p-0.5">
+<button class="p-1 bg-[#4b55ff] text-white rounded">
+<span class="material-symbols-outlined text-[16px]">rectangle</span>
+</button>
+<button class="p-1 hover:text-white transition-colors">
+<span class="material-symbols-outlined text-[16px]">grid_view</span>
+</button>
+<button class="p-1 hover:text-white transition-colors">
+<span class="material-symbols-outlined text-[16px]">picture_in_picture_alt</span>
+</button>
+</div>
+</div>
+</div>
+<!-- Persistent Chat Section -->
+<div class="flex-1 flex flex-col mx-4 mb-4 bg-white/5 rounded-xl border border-white/10 overflow-hidden">
+<div class="p-3 border-b border-white/10 flex items-center justify-between">
+<span class="text-xs font-bold text-white/90">Chat</span>
+<span class="material-symbols-outlined text-[16px] text-white/40">expand_more</span>
+</div>
+<div class="flex-1 p-4 overflow-y-auto space-y-4">
+<div class="space-y-1">
+<p class="text-[10px] text-white/40 font-bold">Ilse • 10:45 AM</p>
+<p class="text-xs text-white/80 leading-relaxed bg-white/5 p-2 rounded-lg">Let's focus on the design system today.</p>
+</div>
+<div class="space-y-1">
+<p class="text-[10px] text-white/40 font-bold">You • 10:46 AM</p>
+<p class="text-xs text-white/80 leading-relaxed bg-primary/20 p-2 rounded-lg">Sounds good, I'm opening the Figma file.</p>
+</div>
+</div>
+<div class="p-3">
+<div class="bg-white/10 rounded-lg flex items-center px-3 py-2">
+<input class="bg-transparent border-none text-xs text-white placeholder-white/30 focus:ring-0 w-full p-0" placeholder="Type a message..." type="text"/>
+<button class="text-white/40 hover:text-white">
+<span class="material-symbols-outlined text-[18px]">send</span>
+</button>
+</div>
+</div>
+</div>
+</aside>
+<!-- Vertical Feedback Tab -->
+<aside class="absolute right-0 top-1/2 -translate-y-1/2 z-30">
+<div class="bg-white text-black py-4 px-1 flex flex-col items-center gap-4 cursor-pointer hover:bg-gray-100 transition-all rounded-l-md shadow-xl">
+<span class="material-symbols-outlined text-[16px]" style="writing-mode: vertical-rl;">thumbs_up_down</span>
+<span class="text-[9px] uppercase font-bold tracking-tighter" style="writing-mode: vertical-rl; text-orientation: mixed;">Video Feedback</span>
+</div>
+</aside>
+</div>
+<!-- Bottom Navigation Bar (Meeting Controls) -->
+<nav class="h-20 bg-[#0b1219] border-t border-white/5 flex items-center justify-center px-8 relative z-50">
+<div class="flex items-center gap-10">
+<!-- Video Toggle -->
+<button class="text-white/60 hover:text-white transition-colors group flex flex-col items-center">
+<span class="material-symbols-outlined text-[24px]" data-icon="videocam">videocam</span>
+<span class="text-[9px] font-bold mt-1 group-hover:text-white uppercase tracking-wider">Turn off</span>
+</button>
+<!-- Mute Toggle -->
+<button class="text-white/60 hover:text-white transition-colors group flex flex-col items-center">
+<div class="flex items-center gap-0.5">
+<span class="material-symbols-outlined text-[24px]" data-icon="mic">mic</span>
+<span class="material-symbols-outlined text-[12px]">expand_more</span>
+</div>
+<span class="text-[9px] font-bold mt-1 uppercase tracking-wider">Mute</span>
+</button>
+<!-- Chat (Active Context) -->
+<button class="text-white flex flex-col items-center">
+<span class="material-symbols-outlined text-[24px]">chat_bubble</span>
+<span class="text-[9px] font-bold mt-1 uppercase tracking-wider">Chat</span>
+</button>
+<!-- Share -->
+<button class="text-white/60 hover:text-white transition-colors group flex flex-col items-center">
+<span class="material-symbols-outlined text-[24px]" data-icon="screen_share">screen_share</span>
+<span class="text-[9px] font-bold mt-1 uppercase tracking-wider">Share</span>
+</button>
+</div>
+<!-- Right Side Nav: Settings -->
+<div class="absolute right-8 flex items-center gap-4">
+<button class="text-white/60 hover:text-white">
+<span class="material-symbols-outlined text-[20px]">settings</span>
+</button>
+</div>
+</nav>
+<!-- Visual Polish: Grain Overlay -->
+<div class="fixed inset-0 pointer-events-none z-[60] opacity-[0.03] mix-blend-overlay bg-[url('https://grainy-gradients.vercel.app/noise.svg')]"></div>
+</body></html>

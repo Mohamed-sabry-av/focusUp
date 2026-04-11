@@ -255,4 +255,143 @@ export class SessionsService {
       },
     });
   }
+
+  /**
+   * Fetch upcoming sessions for the user within the next 7 days.
+   */
+  static async getUpcomingSessions(userId: string) {
+    const now = new Date();
+    const sevenDaysLater = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
+
+    const sessions = await prisma.session.findMany({
+      where: {
+        AND: [
+          {
+            OR: [
+              { user1Id: userId },
+              { user2Id: userId },
+            ],
+          },
+          { scheduledAt: { gt: now, lt: sevenDaysLater } },
+          {
+            status: {
+              in: ['PENDING', 'CONFIRMED', 'ACTIVE'],
+            },
+          },
+        ],
+      },
+      include: {
+        user1: {
+          select: {
+            id: true,
+            displayName: true,
+            username: true,
+            avatarUrl: true,
+          },
+        },
+        user2: {
+          select: {
+            id: true,
+            displayName: true,
+            username: true,
+            avatarUrl: true,
+          },
+        },
+      },
+      orderBy: {
+        scheduledAt: 'asc',
+      },
+    });
+
+    return sessions.map((session) => {
+      const isUser1 = session.user1Id === userId;
+      const partner = isUser1 ? session.user2 : session.user1;
+      return {
+        ...session,
+        partner,
+      };
+    });
+  }
+
+  /**
+   * Fetch session history with pagination.
+   */
+  static async getSessionHistory(userId: string, page: number = 1, limit: number = 10) {
+    const skip = (page - 1) * limit;
+
+    const where = {
+      AND: [
+        {
+          OR: [
+            { user1Id: userId },
+            { user2Id: userId },
+          ],
+        },
+        {
+          status: {
+            in: ['COMPLETED', 'CANCELLED', 'NO_SHOW'],
+          },
+        },
+      ],
+    };
+
+    const [total, sessions] = await Promise.all([
+      prisma.session.count({ where }),
+      prisma.session.findMany({
+        where,
+        include: {
+          user1: {
+            select: {
+              id: true,
+              displayName: true,
+              username: true,
+              avatarUrl: true,
+            },
+          },
+          user2: {
+            select: {
+              id: true,
+              displayName: true,
+              username: true,
+              avatarUrl: true,
+            },
+          },
+          reflections: {
+            where: { userId },
+            take: 1,
+            select: {
+              text: true,
+            },
+          },
+        },
+        orderBy: {
+          scheduledAt: 'desc',
+        },
+        skip,
+        take: limit,
+      }),
+    ]);
+
+    const data = sessions.map((session) => {
+      const isUser1 = session.user1Id === userId;
+      const partner = isUser1 ? session.user2 : session.user1;
+      const reflectionSnippet = session.reflections[0]?.text
+        ? session.reflections[0].text.substring(0, 100) + (session.reflections[0].text.length > 100 ? '...' : '')
+        : null;
+
+      return {
+        ...session,
+        partner,
+        reflectionSnippet,
+        reflections: undefined, // remove full reflections list
+      };
+    });
+
+    return {
+      data,
+      total,
+      page,
+      totalPages: Math.ceil(total / limit),
+    };
+  }
 }

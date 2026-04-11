@@ -21,4 +21,10 @@ router.get('/status/:sessionId', SessionsController.getSessionStatus);
 // POST /sessions/reflections — Create a reflection
 router.post('/reflections', SessionsController.createReflection);
 
+// GET /sessions/upcoming — Get user's upcoming sessions
+router.get('/upcoming', SessionsController.getUpcoming);
+
+// GET /sessions/history — Get user's session history
+router.get('/history', SessionsController.getHistory);
+
 export default router;

@@ -14,6 +14,8 @@ vi.mock('../../../lib/prisma', () => ({
     session: {
       findUnique: vi.fn(),
       update: vi.fn(),
+      findMany: vi.fn(),
+      count: vi.fn(),
     },
     reflection: {
       findFirst: vi.fn(),
@@ -101,7 +103,7 @@ describe('Sessions Endpoints', () => {
   describe('GET /api/v1/sessions/token/:sessionId', () => {
     it('should return a token for a valid participant', async () => {
       // Auth middleware user lookup
-      vi.mocked(prisma.user.findUnique).mockResolvedValueOnce({
+      (prisma.user.findUnique as any).mockResolvedValueOnce({
         id: 'user-1',
         email: 'user1@example.com',
         username: 'userone',
@@ -111,7 +113,7 @@ describe('Sessions Endpoints', () => {
       } as never);
 
       // Session lookup in service
-      vi.mocked(prisma.session.findUnique).mockResolvedValueOnce(BASE_SESSION as never);
+      (prisma.session.findUnique as any).mockResolvedValueOnce(BASE_SESSION as never);
 
       const res = await request(app)
         .get('/api/v1/sessions/token/session-1')
@@ -122,7 +124,7 @@ describe('Sessions Endpoints', () => {
     });
 
     it('should return 403 for non-participant', async () => {
-      vi.mocked(prisma.user.findUnique).mockResolvedValueOnce({
+      (prisma.user.findUnique as any).mockResolvedValueOnce({
         id: 'user-3',
         email: 'user3@example.com',
         username: 'userthree',
@@ -131,7 +133,7 @@ describe('Sessions Endpoints', () => {
         isBanned: false,
       } as never);
 
-      vi.mocked(prisma.session.findUnique).mockResolvedValueOnce(BASE_SESSION as never);
+      (prisma.session.findUnique as any).mockResolvedValueOnce(BASE_SESSION as never);
 
       const res = await request(app)
         .get('/api/v1/sessions/token/session-1')
@@ -142,7 +144,7 @@ describe('Sessions Endpoints', () => {
     });
 
     it('should return 403 for wrong session status', async () => {
-      vi.mocked(prisma.user.findUnique).mockResolvedValueOnce({
+      (prisma.user.findUnique as any).mockResolvedValueOnce({
         id: 'user-1',
         email: 'user1@example.com',
         username: 'userone',
@@ -151,7 +153,7 @@ describe('Sessions Endpoints', () => {
         isBanned: false,
       } as never);
 
-      vi.mocked(prisma.session.findUnique).mockResolvedValueOnce({
+      (prisma.session.findUnique as any).mockResolvedValueOnce({
         ...BASE_SESSION,
         status: 'CANCELLED',
       } as never);
@@ -165,7 +167,7 @@ describe('Sessions Endpoints', () => {
     });
 
     it('should return 404 for non-existent session', async () => {
-      vi.mocked(prisma.user.findUnique).mockResolvedValueOnce({
+      (prisma.user.findUnique as any).mockResolvedValueOnce({
         id: 'user-1',
         email: 'user1@example.com',
         username: 'userone',
@@ -174,7 +176,7 @@ describe('Sessions Endpoints', () => {
         isBanned: false,
       } as never);
 
-      vi.mocked(prisma.session.findUnique).mockResolvedValueOnce(null);
+      (prisma.session.findUnique as any).mockResolvedValueOnce(null);
 
       const res = await request(app)
         .get('/api/v1/sessions/token/nonexistent')
@@ -189,7 +191,7 @@ describe('Sessions Endpoints', () => {
 
   describe('PATCH /api/v1/sessions/goal/:sessionId', () => {
     it('should allow user1 to set user1Goal', async () => {
-      vi.mocked(prisma.user.findUnique).mockResolvedValueOnce({
+      (prisma.user.findUnique as any).mockResolvedValueOnce({
         id: 'user-1',
         email: 'user1@example.com',
         username: 'userone',
@@ -198,8 +200,8 @@ describe('Sessions Endpoints', () => {
         isBanned: false,
       } as never);
 
-      vi.mocked(prisma.session.findUnique).mockResolvedValueOnce(BASE_SESSION as never);
-      vi.mocked(prisma.session.update).mockResolvedValueOnce({
+      (prisma.session.findUnique as any).mockResolvedValueOnce(BASE_SESSION as never);
+      (prisma.session.update as any).mockResolvedValueOnce({
         ...BASE_SESSION,
         user1Goal: 'Finish API implementation',
       } as never);
@@ -218,7 +220,7 @@ describe('Sessions Endpoints', () => {
     });
 
     it('should allow user2 to set user2Goal', async () => {
-      vi.mocked(prisma.user.findUnique).mockResolvedValueOnce({
+      (prisma.user.findUnique as any).mockResolvedValueOnce({
         id: 'user-2',
         email: 'user2@example.com',
         username: 'usertwo',
@@ -227,8 +229,8 @@ describe('Sessions Endpoints', () => {
         isBanned: false,
       } as never);
 
-      vi.mocked(prisma.session.findUnique).mockResolvedValueOnce(BASE_SESSION as never);
-      vi.mocked(prisma.session.update).mockResolvedValueOnce({
+      (prisma.session.findUnique as any).mockResolvedValueOnce(BASE_SESSION as never);
+      (prisma.session.update as any).mockResolvedValueOnce({
         ...BASE_SESSION,
         user2Goal: 'Study for exams',
       } as never);
@@ -247,7 +249,7 @@ describe('Sessions Endpoints', () => {
     });
 
     it('should return 403 for non-participant setting goal', async () => {
-      vi.mocked(prisma.user.findUnique).mockResolvedValueOnce({
+      (prisma.user.findUnique as any).mockResolvedValueOnce({
         id: 'user-3',
         email: 'user3@example.com',
         username: 'userthree',
@@ -256,7 +258,7 @@ describe('Sessions Endpoints', () => {
         isBanned: false,
       } as never);
 
-      vi.mocked(prisma.session.findUnique).mockResolvedValueOnce(BASE_SESSION as never);
+      (prisma.session.findUnique as any).mockResolvedValueOnce(BASE_SESSION as never);
 
       const res = await request(app)
         .patch('/api/v1/sessions/goal/session-1')
@@ -272,7 +274,7 @@ describe('Sessions Endpoints', () => {
 
   describe('PATCH /api/v1/sessions/join/:sessionId', () => {
     it('should stay CONFIRMED for first user join', async () => {
-      vi.mocked(prisma.user.findUnique).mockResolvedValueOnce({
+      (prisma.user.findUnique as any).mockResolvedValueOnce({
         id: 'user-1',
         email: 'user1@example.com',
         username: 'userone',
@@ -281,9 +283,9 @@ describe('Sessions Endpoints', () => {
         isBanned: false,
       } as never);
 
-      vi.mocked(prisma.session.findUnique).mockResolvedValueOnce(BASE_SESSION as never);
+      (prisma.session.findUnique as any).mockResolvedValueOnce(BASE_SESSION as never);
       const { redis } = await import('../../../lib/redis');
-      vi.mocked(redis.scard).mockResolvedValueOnce(1); // Only 1 user joined
+      (redis.scard as any).mockResolvedValueOnce(1); // Only 1 user joined
 
       const res = await request(app)
         .patch('/api/v1/sessions/join/session-1')
@@ -295,7 +297,7 @@ describe('Sessions Endpoints', () => {
     });
 
     it('should become ACTIVE for second user join', async () => {
-      vi.mocked(prisma.user.findUnique).mockResolvedValueOnce({
+      (prisma.user.findUnique as any).mockResolvedValueOnce({
         id: 'user-2',
         email: 'user2@example.com',
         username: 'usertwo',
@@ -304,10 +306,10 @@ describe('Sessions Endpoints', () => {
         isBanned: false,
       } as never);
 
-      vi.mocked(prisma.session.findUnique).mockResolvedValueOnce(BASE_SESSION as never);
+      (prisma.session.findUnique as any).mockResolvedValueOnce(BASE_SESSION as never);
       const { redis } = await import('../../../lib/redis');
-      vi.mocked(redis.scard).mockResolvedValueOnce(2); // 2 users joined
-      vi.mocked(prisma.session.update).mockResolvedValueOnce({
+      (redis.scard as any).mockResolvedValueOnce(2); // 2 users joined
+      (prisma.session.update as any).mockResolvedValueOnce({
         ...BASE_SESSION,
         status: 'ACTIVE',
         startedAt: new Date(),
@@ -323,12 +325,12 @@ describe('Sessions Endpoints', () => {
     });
 
     it('should return 403 for non-participant', async () => {
-      vi.mocked(prisma.user.findUnique).mockResolvedValueOnce({
+      (prisma.user.findUnique as any).mockResolvedValueOnce({
         id: 'user-3',
         isActive: true,
         isBanned: false,
       } as never);
-      vi.mocked(prisma.session.findUnique).mockResolvedValueOnce(BASE_SESSION as never);
+      (prisma.session.findUnique as any).mockResolvedValueOnce(BASE_SESSION as never);
 
       const res = await request(app)
         .patch('/api/v1/sessions/join/session-1')
@@ -338,12 +340,12 @@ describe('Sessions Endpoints', () => {
     });
 
     it('should return 400 for non-CONFIRMED session', async () => {
-      vi.mocked(prisma.user.findUnique).mockResolvedValueOnce({
+      (prisma.user.findUnique as any).mockResolvedValueOnce({
         id: 'user-1',
         isActive: true,
         isBanned: false,
       } as never);
-      vi.mocked(prisma.session.findUnique).mockResolvedValueOnce({
+      (prisma.session.findUnique as any).mockResolvedValueOnce({
         ...BASE_SESSION,
         status: 'CANCELLED',
       } as never);
@@ -360,18 +362,18 @@ describe('Sessions Endpoints', () => {
 
   describe('PATCH /api/v1/sessions/complete/:sessionId', () => {
     it('should complete an ACTIVE session', async () => {
-      vi.mocked(prisma.user.findUnique).mockResolvedValueOnce({
+      (prisma.user.findUnique as any).mockResolvedValueOnce({
         id: 'user-1',
         isActive: true,
         isBanned: false,
       } as never);
 
-      vi.mocked(prisma.session.findUnique).mockResolvedValueOnce({
+      (prisma.session.findUnique as any).mockResolvedValueOnce({
         ...BASE_SESSION,
         status: 'ACTIVE',
       } as never);
 
-      vi.mocked(prisma.session.update).mockResolvedValueOnce({
+      (prisma.session.update as any).mockResolvedValueOnce({
         ...BASE_SESSION,
         status: 'COMPLETED',
       } as never);
@@ -385,13 +387,13 @@ describe('Sessions Endpoints', () => {
     });
 
     it('should return 400 for non-ACTIVE session', async () => {
-      vi.mocked(prisma.user.findUnique).mockResolvedValueOnce({
+      (prisma.user.findUnique as any).mockResolvedValueOnce({
         id: 'user-1',
         isActive: true,
         isBanned: false,
       } as never);
 
-      vi.mocked(prisma.session.findUnique).mockResolvedValueOnce(BASE_SESSION as never);
+      (prisma.session.findUnique as any).mockResolvedValueOnce(BASE_SESSION as never);
 
       const res = await request(app)
         .patch('/api/v1/sessions/complete/session-1')
@@ -401,12 +403,12 @@ describe('Sessions Endpoints', () => {
     });
 
     it('should return 403 for non-participant', async () => {
-      vi.mocked(prisma.user.findUnique).mockResolvedValueOnce({
+      (prisma.user.findUnique as any).mockResolvedValueOnce({
         id: 'user-3',
         isActive: true,
         isBanned: false,
       } as never);
-      vi.mocked(prisma.session.findUnique).mockResolvedValueOnce({
+      (prisma.session.findUnique as any).mockResolvedValueOnce({
         ...BASE_SESSION,
         status: 'ACTIVE',
       } as never);
@@ -423,20 +425,20 @@ describe('Sessions Endpoints', () => {
 
   describe('POST /api/v1/sessions/reflections', () => {
     it('should create reflection for completed session', async () => {
-      vi.mocked(prisma.user.findUnique).mockResolvedValueOnce({
+      (prisma.user.findUnique as any).mockResolvedValueOnce({
         id: 'user-1',
         isActive: true,
         isBanned: false,
       } as never);
 
-      vi.mocked(prisma.session.findUnique).mockResolvedValueOnce({
+      (prisma.session.findUnique as any).mockResolvedValueOnce({
         ...BASE_SESSION,
         status: 'COMPLETED',
       } as never);
 
-      vi.mocked(prisma.reflection.findFirst).mockResolvedValueOnce(null);
+      (prisma.reflection.findFirst as any).mockResolvedValueOnce(null);
 
-      vi.mocked(prisma.reflection.create).mockResolvedValueOnce({
+      (prisma.reflection.create as any).mockResolvedValueOnce({
         id: 'ref-1',
         sessionId: 'session-1',
         userId: 'user-1',
@@ -456,13 +458,13 @@ describe('Sessions Endpoints', () => {
     });
 
     it('should return 400 for non-COMPLETED session', async () => {
-      vi.mocked(prisma.user.findUnique).mockResolvedValueOnce({
+      (prisma.user.findUnique as any).mockResolvedValueOnce({
         id: 'user-1',
         isActive: true,
         isBanned: false,
       } as never);
 
-      vi.mocked(prisma.session.findUnique).mockResolvedValueOnce(BASE_SESSION as never); // CONFIRMED status
+      (prisma.session.findUnique as any).mockResolvedValueOnce(BASE_SESSION as never); // CONFIRMED status
 
       const res = await request(app)
         .post('/api/v1/sessions/reflections')
@@ -473,13 +475,13 @@ describe('Sessions Endpoints', () => {
     });
 
     it('should return 403 for non-participant', async () => {
-      vi.mocked(prisma.user.findUnique).mockResolvedValueOnce({
+      (prisma.user.findUnique as any).mockResolvedValueOnce({
         id: 'user-3',
         isActive: true,
         isBanned: false,
       } as never);
 
-      vi.mocked(prisma.session.findUnique).mockResolvedValueOnce({ ...BASE_SESSION, status: 'COMPLETED' } as never);
+      (prisma.session.findUnique as any).mockResolvedValueOnce({ ...BASE_SESSION, status: 'COMPLETED' } as never);
 
       const res = await request(app)
         .post('/api/v1/sessions/reflections')
@@ -490,14 +492,14 @@ describe('Sessions Endpoints', () => {
     });
 
     it('should return 409 for duplicate reflection', async () => {
-      vi.mocked(prisma.user.findUnique).mockResolvedValueOnce({
+      (prisma.user.findUnique as any).mockResolvedValueOnce({
         id: 'user-1',
         isActive: true,
         isBanned: false,
       } as never);
 
-      vi.mocked(prisma.session.findUnique).mockResolvedValueOnce({ ...BASE_SESSION, status: 'COMPLETED' } as never);
-      vi.mocked(prisma.reflection.findFirst).mockResolvedValueOnce({ id: 'existing' } as never);
+      (prisma.session.findUnique as any).mockResolvedValueOnce({ ...BASE_SESSION, status: 'COMPLETED' } as never);
+      (prisma.reflection.findFirst as any).mockResolvedValueOnce({ id: 'existing' } as never);
 
       const res = await request(app)
         .post('/api/v1/sessions/reflections')
@@ -508,16 +510,112 @@ describe('Sessions Endpoints', () => {
     });
 
     it('should validate rating correctly', async () => {
-      vi.mocked(prisma.user.findUnique).mockResolvedValueOnce({
+      (prisma.user.findUnique as any).mockResolvedValueOnce({
         id: 'user-1',
         isActive: true,
         isBanned: false,
       } as never);
 
-      vi.mocked(prisma.session.findUnique).mockResolvedValueOnce({ ...BASE_SESSION, status: 'COMPLETED' } as never);
-      vi.mocked(prisma.reflection.findFirst).mockResolvedValueOnce(null);
+      (prisma.session.findUnique as any).mockResolvedValueOnce({ ...BASE_SESSION, status: 'COMPLETED' } as never);
+      (prisma.reflection.findFirst as any).mockResolvedValueOnce(null);
 
       const res = await request(app)
         .post('/api/v1/sessions/reflections')
         .set('Cookie', [authCookie('user-1')])
-        .send({ sessionId: 'session-1', text: 'Great session', rating:
+        .send({ sessionId: 'session-1', text: 'Great session', rating: 6 }); // Invalid rating
+
+      expect(res.status).toBe(400);
+    });
+  });
+
+  // ── Upcoming Sessions ──────────────────────────────────────────
+  describe('GET /api/v1/sessions/upcoming', () => {
+    it('should return future sessions for the user', async () => {
+      (prisma.user.findUnique as any).mockResolvedValue({
+        id: 'user-1',
+        isActive: true,
+        isBanned: false,
+      } as any);
+
+      (prisma.session.findMany as any).mockResolvedValue([
+        {
+          ...BASE_SESSION,
+          user1Id: 'user-1',
+          user2Id: 'user-2',
+          scheduledAt: new Date(Date.now() + 3600000), // 1 hour later
+        },
+      ] as any);
+
+      const res = await request(app)
+        .get('/api/v1/sessions/upcoming')
+        .set('Cookie', [authCookie('user-1')]);
+
+      expect(res.status).toBe(200);
+      expect(res.body.data).toHaveLength(1);
+      expect(res.body.data[0].partner.id).toBe('user-2');
+    });
+
+    it('should only return sessions within 7 days', async () => {
+       (prisma.user.findUnique as any).mockResolvedValue({
+        id: 'user-1',
+        isActive: true,
+        isBanned: false,
+      } as any);
+
+      (prisma.session.findMany as any).mockResolvedValue([]);
+
+      const res = await request(app)
+        .get('/api/v1/sessions/upcoming')
+        .set('Cookie', [authCookie('user-1')]);
+
+      expect(res.status).toBe(200);
+      expect(prisma.session.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            AND: expect.arrayContaining([
+              expect.objectContaining({
+                scheduledAt: expect.objectContaining({
+                  lt: expect.any(Date),
+                }),
+              }),
+            ]),
+          }),
+        })
+      );
+    });
+  });
+
+  // ── Session History ────────────────────────────────────────────
+  describe('GET /api/v1/sessions/history', () => {
+    it('should return paginated history with partner info and reflection snippet', async () => {
+      (prisma.user.findUnique as any).mockResolvedValue({
+        id: 'user-1',
+        isActive: true,
+        isBanned: false,
+      } as any);
+
+      (prisma.session.count as any).mockResolvedValue(15);
+      (prisma.session.findMany as any).mockResolvedValue([
+        {
+          ...BASE_SESSION,
+          user1Id: 'user-1',
+          user2Id: 'user-2',
+          status: 'COMPLETED',
+          reflections: [{ text: 'This is a long reflection that should be truncated because it exceeds one hundred characters by a significant margin.' }],
+        },
+      ] as any);
+
+      const res = await request(app)
+        .get('/api/v1/sessions/history?page=1&limit=10')
+        .set('Cookie', [authCookie('user-1')]);
+
+      expect(res.status).toBe(200);
+      expect(res.body.data).toHaveLength(1);
+      expect(res.body.total).toBe(15);
+      expect(res.body.totalPages).toBe(2);
+      expect(res.body.data[0].partner.id).toBe('user-2');
+      expect(res.body.data[0].reflectionSnippet).toContain('...');
+      expect(res.body.data[0].reflectionSnippet.length).toBeLessThanOrEqual(103); // 100 + "..."
+    });
+  });
+});
