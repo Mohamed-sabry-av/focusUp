@@ -47,6 +47,13 @@ enum ReportStatus {
   DISMISSED
 }
 
+enum BookingRequestStatus {
+  PENDING
+  MATCHED
+  CANCELLED
+  EXPIRED
+}
+
 // MODELS
 
 model User {
@@ -77,6 +84,7 @@ model User {
   reportsReceived  Report[]     @relation("Reported")
   blocks           Block[]      @relation("Blocker")
   blockedBy        Block[]      @relation("Blocked")
+  bookingRequests  BookingRequest[]
 }
 
 model Session {
@@ -99,6 +107,7 @@ model Session {
   user2           User?         @relation("User2Sessions", fields: [user2Id], references: [id])
   reflections     Reflection[]
   reports         Report[]
+  bookingRequests BookingRequest[]
 
   @@index([status])
   @@index([scheduledAt])
@@ -143,4 +152,23 @@ model Block {
   blocked   User     @relation("Blocked", fields: [blockedId], references: [id])
 
   @@unique([blockerId, blockedId])
+}
+
+model BookingRequest {
+  id          String               @id @default(cuid())
+  userId      String
+  slotTime    DateTime
+  durationMin Int
+  status      BookingRequestStatus @default(PENDING)
+  sessionId   String?
+  createdAt   DateTime             @default(now())
+  updatedAt   DateTime             @updatedAt
+
+  user        User                 @relation(fields: [userId], references: [id])
+  session     Session?             @relation(fields: [sessionId], references: [id])
+
+  @@unique([userId, slotTime, durationMin])
+  @@index([slotTime])
+  @@index([status])
+  @@index([userId])
 }

@@ -1,4 +1,8 @@
-import express, { type Application, type Request, type Response } from "express";
+import express, {
+  type Application,
+  type Request,
+  type Response,
+} from "express";
 import cors from "cors";
 import helmet from "helmet";
 import cookieParser from "cookie-parser";
@@ -54,10 +58,32 @@ const authLimiter = rateLimit({
 app.use("/api/v1/auth", authLimiter);
 app.use("/api/v1", v1Router);
 
-app.get("/api/health", (_req: Request, res: Response) => {
+app.get("/api/health", async (_req: Request, res: Response) => {
+  let queues: Record<string, unknown> | undefined;
+  try {
+    const { noshowQueue } = await import("./queues/noshow.queue");
+    const { reminderQueue } = await import("./queues/reminder.queue");
+    const { expiryQueue } = await import("./queues/expiry.queue");
+
+    const [noshowCounts, reminderCounts, expiryCounts] = await Promise.all([
+      noshowQueue.getJobCounts(),
+      reminderQueue.getJobCounts(),
+      expiryQueue.getJobCounts(),
+    ]);
+
+    queues = {
+      "session-noshow": noshowCounts,
+      "session-reminder": reminderCounts,
+      "booking-expiry": expiryCounts,
+    };
+  } catch {
+    queues = undefined;
+  }
+
   res.json({
     status: "ok",
     timestamp: new Date().toISOString(),
+    queues,
   });
 });
 
