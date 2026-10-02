@@ -36,6 +36,7 @@ function useInvalidateFavorites() {
   return () => {
     queryClient.invalidateQueries({ queryKey: ["favorites"] });
     queryClient.invalidateQueries({ queryKey: ["bookings", "available"] });
+    queryClient.invalidateQueries({ queryKey: ["upcomingSessions"] });
   };
 }
 

@@ -11,12 +11,15 @@ import {
   MoreHorizontal,
   X,
 } from "lucide-react";
-import { useAvailableBookings, useUserBookings } from "@/hooks/useBookings";
+import { useAvailableBookings, useWaitingBookings } from "@/hooks/useBookings";
 import type { AvailableBooking } from "@/hooks/useBookings";
 import { buildSelectedSlot, type SelectedSlot } from "@/lib/selected-slot";
 import { isSlotBlocked, isTooSoon, type TimeBlock } from "@/lib/slot-overlap";
 import { WaitingPerson } from "./WaitingPersonCard";
-import { CalendarSessionCard, type CalendarSession } from "./CalendarSessionCard";
+import { CalendarSessionCard } from "./CalendarSessionCard";
+import { toast } from "sonner";
+import type { UpcomingSession } from "@focusUp/shared-types";
+import { useCancelSession } from "@/hooks/useSessionRoom";
 import { useUpcomingSessions } from "@/hooks/useSessions";
 import { useCurrentUser } from "@/hooks/useUser";
 import {
@@ -35,6 +38,11 @@ interface CalendarViewProps {
   onRemoveSlot: (id: string) => void;
   /** Slots picked so far, drawn as cards with Book and Clear. */
   externalSelectedSlots?: SelectedSlot[];
+  /** The session whose details are open, to highlight its card. */
+  selectedSessionId: string | null;
+  onOpenSession: (session: UpcomingSession) => void;
+  onCancelSession: (session: UpcomingSession) => void;
+  onReportBlockSession: (session: UpcomingSession) => void;
 }
 
 const HOUR_HEIGHT = 160;
@@ -48,7 +56,12 @@ export function CalendarView({
   onBookSlot,
   onRemoveSlot,
   externalSelectedSlots = [],
+  selectedSessionId,
+  onOpenSession,
+  onCancelSession,
+  onReportBlockSession,
 }: CalendarViewProps) {
+  const cancelWaiting = useCancelSession();
   const { data: user } = useCurrentUser();
   const currentUserId = user?.data?.user?.id;
   const currentUser = user?.data?.user as
@@ -68,18 +81,15 @@ export function CalendarView({
   const { data: availableData } = useAvailableBookings(isoDateStr, viewDays);
   const availableBookings: AvailableBooking[] = availableData?.data?.bookings ?? [];
 
-  const { data: myPendingData } = useUserBookings("PENDING");
-  const myPendingBookings = myPendingData?.bookings || [];
+  const { data: myPendingBookings = [] } = useWaitingBookings();
 
   const { data: myUpcomingData } = useUpcomingSessions();
-  const mySessions: CalendarSession[] = Array.isArray(myUpcomingData?.data)
-    ? myUpcomingData.data
-    : [];
+  const mySessions: UpcomingSession[] = myUpcomingData?.data ?? [];
 
   // Time the person already has. A new session may not overlap any of it.
   const busyBlocks: TimeBlock[] = [
     ...mySessions.map((s) => ({ start: s.scheduledAt, durationMin: s.durationMin })),
-    ...myPendingBookings.map((b: { slotTime: string; durationMin: number }) => ({
+    ...myPendingBookings.map((b) => ({
       start: b.slotTime,
       durationMin: b.durationMin,
     })),
@@ -324,7 +334,7 @@ export function CalendarView({
 
             // Filter bookings for this column
             const myBookingsInColumn = myPendingBookings.filter(
-              (b: any) => new Date(b.slotTime).toDateString() === dayStartStr,
+              (b) => new Date(b.slotTime).toDateString() === dayStartStr,
             );
             const availableInColumn = availableBookings.filter(
               (b) =>
@@ -487,7 +497,7 @@ export function CalendarView({
                 })}
 
                 {/* MY PENDING BOOKINGS - Focusmate card style */}
-                {myBookingsInColumn.map((b: any) => {
+                {myBookingsInColumn.map((b) => {
                   const d = new Date(b.slotTime);
                   const min = d.getHours() * 60 + d.getMinutes();
                   const endMin = min + b.durationMin;
@@ -518,23 +528,38 @@ export function CalendarView({
                             Matching...
                           </div>
                         </div>
-                        <Shuffle className="w-3 h-3 text-slate-300 shrink-0" />
+                        <button
+                          type="button"
+                          aria-label="Cancel this booking"
+                          onClick={() =>
+                            cancelWaiting.mutate(b.id, {
+                              onSuccess: () => toast.success("Booking cancelled"),
+                              onError: (error) => toast.error(error.message),
+                            })
+                          }
+                          className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-slate-400 hover:bg-white hover:text-red-600"
+                        >
+                          <X className="h-4 w-4" aria-hidden />
+                        </button>
                       </div>
                     </div>
                   );
                 })}
 
-                {/* MY MATCHED SESSIONS: the Join button lives on the card */}
-                {sessionsInColumn.map((s: CalendarSession) => {
+                {/* MY MATCHED SESSIONS: partner, menu, cancel and Join live on the card */}
+                {sessionsInColumn.map((s) => {
                   const d = new Date(s.scheduledAt);
                   return (
                     <CalendarSessionCard
                       key={s.id}
                       session={s}
-                      currentUserId={currentUserId}
                       now={now}
                       top={(d.getHours() * 60 + d.getMinutes()) * MINUTE_HEIGHT}
                       height={s.durationMin * MINUTE_HEIGHT}
+                      selected={s.id === selectedSessionId}
+                      onOpen={onOpenSession}
+                      onCancel={onCancelSession}
+                      onReportBlock={onReportBlockSession}
                     />
                   );
                 })}

@@ -35,7 +35,14 @@ import {
   useUserPreferences,
   useUpdatePreferences,
 } from "@/hooks/useUser";
-import { useCreateBooking } from "@/hooks/useBookings";
+import { useCreateBooking, useWaitingBookings } from "@/hooks/useBookings";
+import { useUpcomingSessions } from "@/hooks/useSessions";
+import { useIsMobile } from "@/hooks/useIsMobile";
+import type { UpcomingSession } from "@focusUp/shared-types";
+import { CancelSessionDialog } from "@/components/dashboard/CancelSessionDialog";
+import { ReportBlockDialog } from "@/components/dashboard/ReportBlockDialog";
+import { SessionDetailsPanel } from "@/components/dashboard/SessionDetailsPanel";
+import { UpcomingSessionsCard } from "@/components/dashboard/UpcomingSessionsCard";
 import { toast } from "sonner";
 import { CalendarView } from "@/components/dashboard/CalendarView";
 import { BookingSidebar } from "@/components/dashboard/BookingSidebar";
@@ -661,6 +668,31 @@ export default function DashboardPage() {
 
   const createBooking = useCreateBooking();
 
+  // My matched sessions: the Upcoming list, the calendar cards and the details panel share them.
+  const { data: upcomingData } = useUpcomingSessions();
+  const upcomingSessions: UpcomingSession[] = upcomingData?.data ?? [];
+  const { data: waitingBookings = [] } = useWaitingBookings();
+  const [selectedSessionId, setSelectedSessionId] = useState<string | null>(null);
+  const [cancelTarget, setCancelTarget] = useState<UpcomingSession | null>(null);
+  const [reportTarget, setReportTarget] = useState<UpcomingSession | null>(null);
+  const selectedSession = upcomingSessions.find((s) => s.id === selectedSessionId) ?? null;
+  const isMobile = useIsMobile();
+
+  // Join buttons and the "opens at" hint depend on the time, so it ticks every 30 seconds.
+  const [now, setNow] = useState(() => new Date());
+  useEffect(() => {
+    const timer = setInterval(() => setNow(new Date()), 30_000);
+    return () => clearInterval(timer);
+  }, []);
+
+  const handleOpenSession = useCallback((session: UpcomingSession) => {
+    setSelectedSessionId(session.id);
+    setIsRightPanelOpen(true);
+  }, []);
+  const handleSessionGone = useCallback((sessionId: string) => {
+    setSelectedSessionId((current) => (current === sessionId ? null : current));
+  }, []);
+
   const handleSlotSelected = useCallback(
     (slot: SelectedSlot) => {
       setSelectedSlots((prev) => {
@@ -780,6 +812,10 @@ export default function DashboardPage() {
                 onBookSlot={handleBookSlot}
                 onRemoveSlot={handleRemoveSlotWithOutcome}
                 externalSelectedSlots={selectedSlots}
+                selectedSessionId={selectedSessionId}
+                onOpenSession={handleOpenSession}
+                onCancelSession={setCancelTarget}
+                onReportBlockSession={setReportTarget}
               />
             )}
             {activeTab === "people" && <FavoritesPanel />}
@@ -894,6 +930,12 @@ export default function DashboardPage() {
                 onBookWithoutSelection={handleBookWithoutSelection}
                 isBooking={isBooking}
                 blockedReason={blockedReason}
+                upcomingSessions={upcomingSessions}
+                waitingBookings={waitingBookings}
+                now={now}
+                onOpenSession={handleOpenSession}
+                onCancelSession={setCancelTarget}
+                onReportBlockSession={setReportTarget}
                 onCollapse={() => setIsLeftPanelOpen(false)}
               />
             </div>
@@ -919,6 +961,10 @@ export default function DashboardPage() {
                 onBookSlot={handleBookSlot}
                 onRemoveSlot={handleRemoveSlotWithOutcome}
                 externalSelectedSlots={selectedSlots}
+                selectedSessionId={selectedSessionId}
+                onOpenSession={handleOpenSession}
+                onCancelSession={setCancelTarget}
+                onReportBlockSession={setReportTarget}
               />
             )}
             {activeTab === "people" && <FavoritesPanel />}
@@ -951,9 +997,20 @@ export default function DashboardPage() {
           {/* Right panel card */}
           {isRightPanelOpen && (
             <div className="rounded-2xl overflow-hidden shadow-sm border border-slate-200/60 shrink-0 bg-white">
-              <RightProfilePanel
-                onCollapse={() => setIsRightPanelOpen(false)}
-              />
+              {selectedSession && !isMobile ? (
+                <SessionDetailsPanel
+                  key={selectedSession.id}
+                  session={selectedSession}
+                  now={now}
+                  onBack={() => setSelectedSessionId(null)}
+                  onCancel={setCancelTarget}
+                  onReportBlock={setReportTarget}
+                />
+              ) : (
+                <RightProfilePanel
+                  onCollapse={() => setIsRightPanelOpen(false)}
+                />
+              )}
             </div>
           )}
 
@@ -987,6 +1044,18 @@ export default function DashboardPage() {
                 </button>
               </div>
 
+              <UpcomingSessionsCard
+                sessions={upcomingSessions}
+                waiting={waitingBookings}
+                now={now}
+                onOpen={(session) => {
+                  setMobileBookingOpen(false);
+                  handleOpenSession(session);
+                }}
+                onCancel={setCancelTarget}
+                onReportBlock={setReportTarget}
+              />
+
               <BookingOptions
                 duration={duration}
                 onDurationChange={setDuration}
@@ -1019,6 +1088,36 @@ export default function DashboardPage() {
             </div>
           </SheetContent>
         </Sheet>
+
+        {/* Session details on a phone */}
+        <Sheet
+          open={isMobile && selectedSession !== null}
+          onOpenChange={(open) => !open && setSelectedSessionId(null)}
+        >
+          <SheetContent side="bottom" className="max-h-[92vh] rounded-t-2xl bg-white p-0">
+            {selectedSession && (
+              <SessionDetailsPanel
+                key={selectedSession.id}
+                session={selectedSession}
+                now={now}
+                onBack={() => setSelectedSessionId(null)}
+                onCancel={setCancelTarget}
+                onReportBlock={setReportTarget}
+              />
+            )}
+          </SheetContent>
+        </Sheet>
+
+        <CancelSessionDialog
+          session={cancelTarget}
+          onClose={() => setCancelTarget(null)}
+          onCancelled={handleSessionGone}
+        />
+        <ReportBlockDialog
+          session={reportTarget}
+          onClose={() => setReportTarget(null)}
+          onDone={handleSessionGone}
+        />
       </div>
     </>
   );

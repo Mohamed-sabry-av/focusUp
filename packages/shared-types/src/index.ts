@@ -250,6 +250,16 @@ export const UpcomingSession = z.object({
 });
 export type UpcomingSession = z.infer<typeof UpcomingSession>;
 
+/** A booking of mine that is still waiting for a partner. */
+export const WaitingBooking = z.object({
+  id: z.string(),
+  slotTime: z.string().datetime(),
+  durationMin: z.number().int(),
+  quiet: z.boolean(),
+  taskType: TaskType,
+});
+export type WaitingBooking = z.infer<typeof WaitingBooking>;
+
 export const SessionTokenResponse = z.object({ token: z.string() });
 export type SessionTokenResponse = z.infer<typeof SessionTokenResponse>;
 

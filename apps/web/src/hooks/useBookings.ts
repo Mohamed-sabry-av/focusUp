@@ -3,6 +3,10 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { env } from '@focusUp/env/web';
 
+import { WaitingBooking } from '@focusUp/shared-types';
+import { z } from 'zod';
+
+import { apiRequest } from '@/lib/api-client';
 import { BookingRequestError } from '@/lib/booking-errors';
 import type { BookingOptions, TaskType } from '@/lib/booking-options';
 
@@ -81,6 +85,22 @@ export function useUserBookings(status?: string) {
       if (!res.ok) throw new Error('Failed to fetch bookings');
       return res.json();
     },
+  });
+}
+
+/**
+ * My bookings that are still waiting for a partner and have not ended. The calendar draws them as
+ * "Matching..." cards and the Upcoming list shows them, so a booking never seems to vanish.
+ */
+export function useWaitingBookings() {
+  return useQuery({
+    queryKey: ['bookings', 'waiting'],
+    queryFn: async () => {
+      const bookings = await apiRequest('/bookings?status=PENDING&limit=50', { schema: z.array(WaitingBooking) });
+      const now = Date.now();
+      return bookings.filter((b) => new Date(b.slotTime).getTime() + b.durationMin * 60_000 > now);
+    },
+    refetchInterval: 30_000,
   });
 }
 

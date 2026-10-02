@@ -7,6 +7,8 @@ import type { BookingOptions as BookingOptionsValue } from "@/lib/booking-option
 import type { SelectedSlot, SlotOutcome } from "@/lib/selected-slot";
 import { BookingOptions } from "./BookingOptions";
 import { SelectedSessionsCard } from "./SelectedSessionsCard";
+import { UpcomingSessionsCard } from "./UpcomingSessionsCard";
+import type { UpcomingSession, WaitingBooking } from "@focusUp/shared-types";
 
 interface BookingSidebarProps {
   duration: number;
@@ -24,6 +26,14 @@ interface BookingSidebarProps {
   isBooking: boolean;
   /** Why booking is not possible right now (for example a suspension), or null. */
   blockedReason: string | null;
+  /** My matched sessions, shown as the Upcoming list. */
+  upcomingSessions: UpcomingSession[];
+  /** My bookings still waiting for a partner, listed in Upcoming too. */
+  waitingBookings: WaitingBooking[];
+  now: Date;
+  onOpenSession: (session: UpcomingSession) => void;
+  onCancelSession: (session: UpcomingSession) => void;
+  onReportBlockSession: (session: UpcomingSession) => void;
   onCollapse?: () => void;
 }
 
@@ -41,6 +51,12 @@ export function BookingSidebar({
   onBookWithoutSelection,
   isBooking,
   blockedReason,
+  upcomingSessions,
+  waitingBookings,
+  now,
+  onOpenSession,
+  onCancelSession,
+  onReportBlockSession,
   onCollapse,
 }: BookingSidebarProps) {
   const disabled = isBooking || blockedReason !== null;
@@ -102,6 +118,15 @@ export function BookingSidebar({
           outcomes={outcomes}
           onRemove={onRemoveSlot}
           onClearAll={onClearAll}
+        />
+
+        <UpcomingSessionsCard
+          sessions={upcomingSessions}
+          waiting={waitingBookings}
+          now={now}
+          onOpen={onOpenSession}
+          onCancel={onCancelSession}
+          onReportBlock={onReportBlockSession}
         />
 
         {selectedSlots.length === 0 && (
