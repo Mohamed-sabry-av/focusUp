@@ -7,7 +7,8 @@ import { RPCHandler } from "@orpc/server/node";
 import { ZodToJsonSchemaConverter } from "@orpc/zod/zod4";
 import cors from "cors";
 import express from "express";
-
+import { createServer } from "http";
+import { initializeSocket } from "../../api/src/lib/socket";
 const app = express();
 
 const localDevOrigins = [
@@ -75,6 +76,17 @@ app.get("/", (_req, res) => {
 import restApp from "../../api/src/app";
 app.use(restApp);
 
-app.listen(3000, () => {
+const httpServer = createServer(app);
+initializeSocket(httpServer);
+
+httpServer.listen(3000, () => {
   console.log("Server is running on http://localhost:3000");
+});
+
+// Update SIGTERM/SIGINT to also close socket server
+process.on("SIGTERM", () => {
+  console.log("SIGTERM received, closing HTTP server");
+  httpServer.close(() => {
+    console.log("HTTP server closed");
+  });
 });

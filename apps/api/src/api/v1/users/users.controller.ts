@@ -58,4 +58,29 @@ export class UsersController {
       next(error);
     }
   }
+
+  static async getPartners(
+    req: Request,
+    res: Response,
+    next: NextFunction,
+  ): Promise<void> {
+    try {
+      if (!req.user) {
+        res.status(401).json({ error: "Not authenticated", statusCode: 401 });
+        return;
+      }
+
+      const page = parseInt(req.query.page as string) || 1;
+      const limit = parseInt(req.query.limit as string) || 10;
+
+      const result = await UsersService.getPreviousPartners(
+        req.user.id,
+        page,
+        limit,
+      );
+      res.status(200).json(result);
+    } catch (error) {
+      next(error);
+    }
+  }
 }

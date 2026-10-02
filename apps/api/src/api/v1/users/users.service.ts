@@ -1,7 +1,7 @@
-import { prisma } from '../../../lib/prisma';
-import type { OnboardingInput } from '@focusUp/shared-types';
-import { AppError } from '../../../utils/errors';
-import { SessionStatus, PlanTier } from '@prisma/client';
+import { prisma } from "../../../lib/prisma";
+import type { OnboardingInput } from "@focusUp/shared-types";
+import { AppError } from "../../../utils/errors";
+import { SessionStatus, PlanTier } from "@prisma/client";
 
 export class UsersService {
   private static getStartOfWeek(date: Date) {
@@ -13,7 +13,12 @@ export class UsersService {
 
   private static getEndOfWeek(date: Date) {
     const start = new Date(this.getStartOfWeek(date));
-    return new Date(start.setDate(start.getDate() + 6)).setHours(23, 59, 59, 999);
+    return new Date(start.setDate(start.getDate() + 6)).setHours(
+      23,
+      59,
+      59,
+      999,
+    );
   }
 
   private static getStartOfDay(date: Date) {
@@ -26,7 +31,7 @@ export class UsersService {
     });
 
     if (!user) {
-      throw new AppError('User not found', 404);
+      throw new AppError("User not found", 404);
     }
 
     const { passwordHash: _, ...safeUser } = user;
@@ -40,7 +45,7 @@ export class UsersService {
     });
 
     if (!user) {
-      throw new AppError('User not found', 404);
+      throw new AppError("User not found", 404);
     }
 
     const now = new Date();
@@ -52,10 +57,7 @@ export class UsersService {
       where: {
         AND: [
           {
-            OR: [
-              { user1Id: userId },
-              { user2Id: userId },
-            ],
+            OR: [{ user1Id: userId }, { user2Id: userId }],
           },
           { status: SessionStatus.COMPLETED },
           { scheduledAt: { gte: startOfCurrentWeek, lte: endOfCurrentWeek } },
@@ -68,10 +70,7 @@ export class UsersService {
       where: {
         AND: [
           {
-            OR: [
-              { user1Id: userId },
-              { user2Id: userId },
-            ],
+            OR: [{ user1Id: userId }, { user2Id: userId }],
           },
           { status: SessionStatus.COMPLETED },
           { scheduledAt: { gte: startOfCurrentWeek, lte: endOfCurrentWeek } },
@@ -80,7 +79,10 @@ export class UsersService {
       select: { durationMin: true },
     });
 
-    const totalMinutes = completedSessions.reduce((sum, s) => sum + s.durationMin, 0);
+    const totalMinutes = completedSessions.reduce(
+      (sum, s) => sum + s.durationMin,
+      0,
+    );
     const focusHoursThisWeek = parseFloat((totalMinutes / 60).toFixed(1));
 
     // currentStreak
@@ -97,10 +99,7 @@ export class UsersService {
         where: {
           AND: [
             {
-              OR: [
-                { user1Id: userId },
-                { user2Id: userId },
-              ],
+              OR: [{ user1Id: userId }, { user2Id: userId }],
             },
             { status: SessionStatus.COMPLETED },
             {
@@ -116,7 +115,9 @@ export class UsersService {
       if (daySessionsCount > 0) {
         currentStreak++;
         // Move backward one day
-        checkDayAtStart = new Date(checkDay.setDate(checkDay.getDate() - 1)).getTime();
+        checkDayAtStart = new Date(
+          checkDay.setDate(checkDay.getDate() - 1),
+        ).getTime();
       } else {
         // If no sessions today, it might still be a streak if there were sessions yesterday
         // But the requirement says "consecutive days going backward from today"
@@ -124,8 +125,10 @@ export class UsersService {
         // Let's check if today has no sessions but yesterday had. If today is still going, streak should include yesterday.
         if (checkDayAtStart === this.getStartOfDay(now)) {
           // Check yesterday
-          checkDayAtStart = new Date(checkDay.setDate(checkDay.getDate() - 1)).getTime();
-          continue; 
+          checkDayAtStart = new Date(
+            checkDay.setDate(checkDay.getDate() - 1),
+          ).getTime();
+          continue;
         }
         break;
       }
@@ -155,5 +158,99 @@ export class UsersService {
 
     const { passwordHash: _, ...safeUser } = user;
     return safeUser;
+  }
+
+  /**
+   * P3-15: Get previous session partners for the user.
+   * Returns unique partners from COMPLETED sessions, excluding blocked users.
+   * Ordered by most recent session together (DESC).
+   */
+  static async getPreviousPartners(
+    userId: string,
+    page: number = 1,
+    limit: number = 10,
+  ) {
+    // Fetch all COMPLETED sessions the user participated in, newest first
+    const sessions = await prisma.session.findMany({
+      where: {
+        OR: [{ user1Id: userId }, { user2Id: userId }],
+        status: "COMPLETED",
+      },
+      include: {
+        user1: {
+          select: {
+            id: true,
+            displayName: true,
+            username: true,
+            avatarUrl: true,
+          },
+        },
+        user2: {
+          select: {
+            id: true,
+            displayName: true,
+            username: true,
+            avatarUrl: true,
+          },
+        },
+      },
+      orderBy: { scheduledAt: "desc" },
+    });
+
+    // Get blocked user IDs (both directions)
+    const blocks = await prisma.block.findMany({
+      where: { blockerId: userId },
+      select: { blockedId: true },
+    });
+    const blockedIds = new Set(blocks.map((b) => b.blockedId));
+
+    // Build partner map: partnerId → { user info, lastSessionDate, count }
+    const partnerMap = new Map<
+      string,
+      {
+        id: string;
+        displayName: string;
+        username: string;
+        avatarUrl: string | null;
+        lastSessionDate: Date;
+        totalSessionsTogether: number;
+      }
+    >();
+
+    for (const session of sessions) {
+      const partner =
+        session.user1Id === userId ? session.user2 : session.user1;
+      if (!partner || blockedIds.has(partner.id)) continue;
+
+      const existing = partnerMap.get(partner.id);
+      if (!existing) {
+        partnerMap.set(partner.id, {
+          id: partner.id,
+          displayName: partner.displayName,
+          username: partner.username,
+          avatarUrl: partner.avatarUrl,
+          lastSessionDate: session.scheduledAt,
+          totalSessionsTogether: 1,
+        });
+      } else {
+        existing.totalSessionsTogether++;
+        // lastSessionDate stays as the most recent (already ordered desc)
+      }
+    }
+
+    // Convert to array, sort by most recent session
+    const all = Array.from(partnerMap.values()).sort(
+      (a, b) => b.lastSessionDate.getTime() - a.lastSessionDate.getTime(),
+    );
+
+    const total = all.length;
+    const paginated = all.slice((page - 1) * limit, page * limit);
+
+    return {
+      data: { partners: paginated },
+      total,
+      page,
+      totalPages: Math.ceil(total / limit),
+    };
   }
 }

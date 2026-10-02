@@ -7,6 +7,7 @@ import {
   scheduleBookingExpiry,
   removeJob,
 } from '../../../queues/helpers';
+import { NotificationService } from '../../../services/notification.service';
 
 export class BookingsService {
   /**
@@ -148,6 +149,9 @@ export class BookingsService {
       // Match found — schedule noshow check and reminders
       await scheduleNoshowCheck(session.id, session.scheduledAt);
       await scheduleReminders(session.id, session.scheduledAt);
+
+      // Send real-time notifications to BOTH users
+      await NotificationService.notifyMatch(session);
 
       // Re-fetch the updated booking request (now MATCHED with sessionId)
       const updatedBooking = await prisma.bookingRequest.findUnique({
@@ -318,7 +322,12 @@ export class BookingsService {
 
       // f) Re-trigger matching for partner
       if (partnerBooking) {
-        await MatchingService.matchBookingRequest(partnerBooking.id);
+        const rematchSession = await MatchingService.matchBookingRequest(partnerBooking.id);
+        if (rematchSession) {
+          await scheduleNoshowCheck(rematchSession.id, rematchSession.scheduledAt);
+          await scheduleReminders(rematchSession.id, rematchSession.scheduledAt);
+          await NotificationService.notifyMatch(rematchSession);
+        }
       }
 
       // 6. Late cancellation penalty
@@ -349,6 +358,69 @@ export class BookingsService {
     }
 
     throw new AppError('Cannot cancel booking in current state', 400);
+  }
+
+  /**
+   * Get available pending bookings from other active users for the calendar timeline.
+   */
+  static async getAvailableBookings(
+    currentUserId: string,
+    dateStr: string,
+    days: number
+  ) {
+    const startDate = new Date(dateStr);
+    startDate.setUTCHours(0, 0, 0, 0);
+
+    const endDate = new Date(startDate);
+    endDate.setUTCDate(startDate.getUTCDate() + days);
+
+    // Get list of users the current user has blocked or who blocked them
+    const blocks = await prisma.block.findMany({
+      where: {
+        OR: [{ blockerId: currentUserId }, { blockedId: currentUserId }],
+      },
+      select: { blockerId: true, blockedId: true },
+    });
+
+    const excludedUserIds = new Set<string>();
+    for (const b of blocks) {
+      if (b.blockerId === currentUserId) excludedUserIds.add(b.blockedId);
+      if (b.blockedId === currentUserId) excludedUserIds.add(b.blockerId);
+    }
+    excludedUserIds.add(currentUserId);
+
+    const bookings = await prisma.bookingRequest.findMany({
+      where: {
+        status: 'PENDING',
+        slotTime: {
+          gte: startDate,
+          lt: endDate,
+        },
+        userId: {
+          notIn: Array.from(excludedUserIds),
+        },
+        user: {
+          isBanned: false,
+          isActive: true,
+        },
+      },
+      select: {
+        id: true,
+        slotTime: true,
+        durationMin: true,
+        user: {
+          select: {
+            id: true,
+            displayName: true,
+            username: true,
+            avatarUrl: true,
+          },
+        },
+      },
+      orderBy: { slotTime: 'asc' },
+    });
+
+    return { bookings };
   }
 }
 

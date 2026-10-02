@@ -1,10 +1,11 @@
 import { useQuery } from '@tanstack/react-query';
+import { env } from '@focusUp/env/web';
 
 export function useUpcomingSessions() {
   return useQuery({
     queryKey: ['upcomingSessions'],
     queryFn: async () => {
-      const res = await fetch('/api/v1/sessions/upcoming', {
+      const res = await fetch(`${env.NEXT_PUBLIC_SERVER_URL}/api/v1/sessions/upcoming`, {
         credentials: 'include',
       });
       if (!res.ok) {
@@ -20,7 +21,7 @@ export function useSessionHistory(page: number) {
   return useQuery({
     queryKey: ['sessionHistory', page],
     queryFn: async () => {
-      const res = await fetch(`/api/v1/sessions/history?page=${page}`, {
+      const res = await fetch(`${env.NEXT_PUBLIC_SERVER_URL}/api/v1/sessions/history?page=${page}`, {
         credentials: 'include',
       });
       if (!res.ok) {

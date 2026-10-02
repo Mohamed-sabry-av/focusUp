@@ -13,10 +13,22 @@ import {
   FileText,
 } from "lucide-react";
 
-const HISTORY_STATUS_CONFIG: Record<string, { label: string; className: string }> = {
-  COMPLETED: { label: "Completed", className: "bg-emerald-50 text-emerald-700 border-emerald-200" },
-  CANCELLED: { label: "Cancelled", className: "bg-slate-50 text-slate-500 border-slate-200" },
-  NO_SHOW: { label: "No Show", className: "bg-red-50 text-red-600 border-red-200" },
+const HISTORY_STATUS_CONFIG: Record<
+  string,
+  { label: string; className: string }
+> = {
+  COMPLETED: {
+    label: "Completed",
+    className: "bg-emerald-50 text-emerald-700 border-emerald-200",
+  },
+  CANCELLED: {
+    label: "Cancelled",
+    className: "bg-slate-50 text-slate-500 border-slate-200",
+  },
+  NO_SHOW: {
+    label: "No Show",
+    className: "bg-red-50 text-red-600 border-red-200",
+  },
 };
 
 function HistoryItemSkeleton() {
@@ -70,20 +82,29 @@ export default function SessionHistory() {
       ) : (
         <div>
           {sessions.map((session: Record<string, unknown>) => {
-            const statusCfg = HISTORY_STATUS_CONFIG[session.status as string] ?? HISTORY_STATUS_CONFIG.COMPLETED;
+            const statusCfg =
+              HISTORY_STATUS_CONFIG[session.status as string] ??
+              HISTORY_STATUS_CONFIG.COMPLETED;
             const isExpanded = expandedId === (session.id as string);
             const partner = session.partner as Record<string, unknown> | null;
             const scheduledAt = new Date(session.scheduledAt as string);
 
             return (
-              <div key={session.id as string} className="border-b border-slate-50 last:border-0">
+              <div
+                key={session.id as string}
+                className="border-b border-slate-50 last:border-0"
+              >
                 <button
-                  onClick={() => setExpandedId(isExpanded ? null : (session.id as string))}
+                  onClick={() =>
+                    setExpandedId(isExpanded ? null : (session.id as string))
+                  }
                   className="w-full flex items-center gap-4 px-5 py-3.5 hover:bg-slate-50/50 transition-colors text-left"
                 >
                   {/* Partner avatar */}
                   <div className="w-9 h-9 rounded-xl bg-[#0245A3]/10 flex items-center justify-center text-sm font-bold text-[#0245A3] shrink-0">
-                    {(partner?.displayName as string)?.charAt(0)?.toUpperCase() ?? "?"}
+                    {String(partner?.displayName ?? "?")
+                      .charAt(0)
+                      .toUpperCase()}
                   </div>
 
                   <div className="flex-1 min-w-0">
@@ -91,54 +112,65 @@ export default function SessionHistory() {
                       {(partner?.displayName as string) ?? "Partner"}
                     </div>
                     <div className="text-xs text-slate-400 font-medium">
-                      {scheduledAt.toLocaleDateString([], { month: "short", day: "numeric" })} · {(session.durationMin as number)} min
+                      {scheduledAt.toLocaleDateString([], {
+                        month: "short",
+                        day: "numeric",
+                      })}{" "}
+                      · {session.durationMin as number} min
                     </div>
                   </div>
 
                   {/* Reflection snippet */}
-                  {session.reflectionSnippet && (
+                  {typeof session.reflectionSnippet === "string" && (
                     <span className="hidden md:block max-w-[200px] text-xs text-slate-400 truncate italic">
-                      &ldquo;{session.reflectionSnippet as string}&rdquo;
+                      &ldquo;{session.reflectionSnippet}&rdquo;
                     </span>
                   )}
 
-                  <Badge variant="outline" className={cn("text-[10px] font-bold border shrink-0", statusCfg.className)}>
+                  <Badge
+                    variant="outline"
+                    className={cn(
+                      "text-[10px] font-bold border shrink-0",
+                      statusCfg.className,
+                    )}
+                  >
                     {statusCfg.label}
                   </Badge>
 
                   <ChevronDown
                     className={cn(
                       "w-4 h-4 text-slate-300 transition-transform duration-200 shrink-0",
-                      isExpanded && "rotate-180"
+                      isExpanded && "rotate-180",
                     )}
                   />
                 </button>
 
                 {/* Expanded reflection */}
-                {isExpanded && session.reflectionSnippet && (
-                  <div className="px-5 pb-4 animate-in slide-in-from-top-1 fade-in duration-200">
-                    <div className="bg-slate-50 rounded-xl p-4 ml-13">
-                      {session.rating && (
-                        <div className="flex items-center gap-1 mb-2">
-                          {Array.from({ length: 5 }).map((_, i) => (
-                            <Star
-                              key={i}
-                              className={cn(
-                                "w-3.5 h-3.5",
-                                i < (session.rating as number)
-                                  ? "text-amber-400 fill-amber-400"
-                                  : "text-slate-200"
-                              )}
-                            />
-                          ))}
-                        </div>
-                      )}
-                      <p className="text-sm text-slate-600 leading-relaxed">
-                        {session.reflectionSnippet as string}
-                      </p>
+                {isExpanded &&
+                  typeof session.reflectionSnippet === "string" && (
+                    <div className="px-5 pb-4 animate-in slide-in-from-top-1 fade-in duration-200">
+                      <div className="bg-slate-50 rounded-xl p-4 ml-13">
+                        {typeof session.rating === "number" && (
+                          <div className="flex items-center gap-1 mb-2">
+                            {Array.from({ length: 5 }).map((_, i) => (
+                              <Star
+                                key={i}
+                                className={cn(
+                                  "w-3.5 h-3.5",
+                                  i < (session.rating as number)
+                                    ? "text-amber-400 fill-amber-400"
+                                    : "text-slate-200",
+                                )}
+                              />
+                            ))}
+                          </div>
+                        )}
+                        <p className="text-sm text-slate-600 leading-relaxed">
+                          {session.reflectionSnippet as string}
+                        </p>
+                      </div>
                     </div>
-                  </div>
-                )}
+                  )}
               </div>
             );
           })}
@@ -155,7 +187,7 @@ export default function SessionHistory() {
               "flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-bold transition-all active:scale-[0.98]",
               page <= 1
                 ? "text-slate-300 cursor-not-allowed"
-                : "text-slate-600 hover:bg-slate-100"
+                : "text-slate-600 hover:bg-slate-100",
             )}
           >
             <ChevronLeft className="w-3.5 h-3.5" />
@@ -171,7 +203,7 @@ export default function SessionHistory() {
               "flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-bold transition-all active:scale-[0.98]",
               page >= totalPages
                 ? "text-slate-300 cursor-not-allowed"
-                : "text-slate-600 hover:bg-slate-100"
+                : "text-slate-600 hover:bg-slate-100",
             )}
           >
             Next

@@ -60,6 +60,32 @@ export class BookingsController {
   }
 
   /**
+   * GET /bookings/available — Get available pending bookings for calendar view.
+   */
+  static async getAvailable(
+    req: Request,
+    res: Response,
+    next: NextFunction
+  ): Promise<void> {
+    try {
+      if (!req.user) throw new AppError('Not authenticated', 401);
+
+      const dateStr = (req.query.date as string) || new Date().toISOString();
+      const days = parseInt(req.query.days as string) || 3;
+
+      const result = await BookingsService.getAvailableBookings(
+        req.user.id,
+        dateStr,
+        days
+      );
+
+      res.status(200).json({ data: result, statusCode: 200 });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
    * DELETE /bookings/:id — Cancel a booking request.
    */
   static async cancel(

@@ -1,4 +1,5 @@
 "use client";
+import type { Route } from "next";
 
 import { useUserStats } from "@/hooks/useUser";
 import { Progress } from "@focusUp/ui/components/progress";
@@ -16,7 +17,9 @@ export default function FreeTierBanner() {
   const sessionsUsed = stats.sessionsUsedThisWeek ?? 0;
   const limit = stats.sessionLimit ?? 3;
   const isAtLimit = sessionsUsed >= limit;
-  const progressPercent = isPro ? 100 : Math.min((sessionsUsed / limit) * 100, 100);
+  const progressPercent = isPro
+    ? 100
+    : Math.min((sessionsUsed / limit) * 100, 100);
 
   if (isPro) {
     return (
@@ -31,7 +34,9 @@ export default function FreeTierBanner() {
               ∞ Sessions
             </span>
           </div>
-          <p className="text-xs text-white/70 font-medium mt-0.5">Unlimited focus sessions</p>
+          <p className="text-xs text-white/70 font-medium mt-0.5">
+            Unlimited focus sessions
+          </p>
         </div>
       </div>
     );
@@ -41,18 +46,23 @@ export default function FreeTierBanner() {
     <div
       className={cn(
         "rounded-2xl p-5 border shadow-sm transition-all duration-300",
-        isAtLimit
-          ? "bg-red-50 border-red-200"
-          : "bg-white border-slate-200"
+        isAtLimit ? "bg-red-50 border-red-200" : "bg-white border-slate-200",
       )}
     >
       <div className="flex items-center justify-between mb-3">
         <div className="flex items-center gap-2">
-          <div className={cn(
-            "p-2 rounded-xl",
-            isAtLimit ? "bg-red-100" : "bg-[#0245A3]/10"
-          )}>
-            <Zap className={cn("w-4 h-4", isAtLimit ? "text-red-600" : "text-[#0245A3]")} />
+          <div
+            className={cn(
+              "p-2 rounded-xl",
+              isAtLimit ? "bg-red-100" : "bg-[#0245A3]/10",
+            )}
+          >
+            <Zap
+              className={cn(
+                "w-4 h-4",
+                isAtLimit ? "text-red-600" : "text-[#0245A3]",
+              )}
+            />
           </div>
           <div>
             <span className="text-sm font-bold text-[#001945]">Free Plan</span>
@@ -63,11 +73,11 @@ export default function FreeTierBanner() {
         </div>
         {isAtLimit && (
           <Link
-            href="/dashboard/upgrade"
+            href={"/dashboard/upgrade" as Route}
             className={cn(
               "flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold text-white",
               "bg-[#0245A3] hover:brightness-110 transition-all active:scale-[0.98]",
-              "shadow-lg shadow-[#0245A3]/20"
+              "shadow-lg shadow-[#0245A3]/20",
             )}
           >
             <Sparkles className="w-3.5 h-3.5" />
@@ -79,7 +89,7 @@ export default function FreeTierBanner() {
         value={progressPercent}
         className={cn(
           "h-2 rounded-full",
-          isAtLimit ? "[&>div]:bg-red-500" : "[&>div]:bg-[#0245A3]"
+          isAtLimit ? "[&>div]:bg-red-500" : "[&>div]:bg-[#0245A3]",
         )}
       />
       {isAtLimit && (

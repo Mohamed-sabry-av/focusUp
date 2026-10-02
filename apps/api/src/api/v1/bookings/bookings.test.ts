@@ -49,6 +49,12 @@ vi.mock('../../../queues/helpers', () => ({
   removeJob: vi.fn().mockResolvedValue(undefined),
 }));
 
+vi.mock('../../../services/notification.service', () => ({
+  NotificationService: {
+    notifyMatch: vi.fn().mockResolvedValue(undefined),
+  },
+}));
+
 vi.mock('../../../lib/redis', () => ({
   redis: {
     sadd: vi.fn(),

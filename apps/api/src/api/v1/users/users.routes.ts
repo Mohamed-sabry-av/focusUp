@@ -12,6 +12,9 @@ router.get("/me", requireAuth, UsersController.getMe);
 // /api/v1/users/me/stats
 router.get("/me/stats", requireAuth, UsersController.getStats);
 
+// /api/v1/users/me/partners
+router.get("/me/partners", requireAuth, UsersController.getPartners);
+
 // /api/v1/users/me/onboarding
 router.patch(
   "/me/onboarding",

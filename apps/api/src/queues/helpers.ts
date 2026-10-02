@@ -51,7 +51,7 @@ export async function scheduleReminders(
   if (scheduledTime - now > fiveMinutes) {
     await reminderQueue.add(
       "reminder-5m",
-      { sessionId, type: "5m" },
+      { sessionId, type: "5min" },
       {
         jobId: `reminder-5m-${sessionId}`,
         delay: scheduledTime - fiveMinutes - now,
