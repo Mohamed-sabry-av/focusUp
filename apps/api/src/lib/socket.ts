@@ -1,6 +1,7 @@
 import { Server as HttpServer } from "http";
 import { Server as SocketServer } from "socket.io";
 import jwt from "jsonwebtoken";
+import { env } from "@focusUp/env/server";
 import { redis } from "./redis";
 import { prisma } from "./prisma";
 
@@ -9,7 +10,7 @@ let io: SocketServer;
 export function initializeSocket(httpServer: HttpServer) {
   io = new SocketServer(httpServer, {
     cors: {
-      origin: process.env.FRONTEND_URL || "http://localhost:3000",
+      origin: env.CORS_ORIGIN,
       credentials: true,
     },
   });

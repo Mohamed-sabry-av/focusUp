@@ -1,22 +1,28 @@
+import { createServer } from "node:http";
+
+import { env } from "@focusUp/env/server";
+
 import app from "./app";
+import { initializeSocket } from "./lib/socket";
 import { noshowWorker } from "./workers/noshow.worker";
 import { reminderWorker } from "./workers/reminder.worker";
 import { expiryWorker } from "./workers/expiry.worker";
 
-const PORT = process.env.PORT;
+const httpServer = createServer(app);
+const io = initializeSocket(httpServer);
 
-const server = app.listen(PORT, () => {
-  console.log(`API running on port ${PORT}`);
+httpServer.listen(env.PORT, () => {
+  console.log(`API running on http://localhost:${env.PORT}`);
 });
 
 const workers = [noshowWorker, reminderWorker, expiryWorker];
 
-async function gracefulShutdown(signal: string) {
+async function gracefulShutdown(signal: string): Promise<void> {
   console.log(`Received ${signal}, shutting down gracefully...`);
-  server.close();
+  await io.close();
   await Promise.all(workers.map((w) => w.close()));
   process.exit(0);
 }
 
-process.on("SIGTERM", () => gracefulShutdown("SIGTERM"));
-process.on("SIGINT", () => gracefulShutdown("SIGINT"));
+process.on("SIGTERM", () => void gracefulShutdown("SIGTERM"));
+process.on("SIGINT", () => void gracefulShutdown("SIGINT"));

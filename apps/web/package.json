@@ -5,19 +5,15 @@
   "scripts": {
     "dev": "next dev --port 3001",
     "build": "next build",
-    "start": "next start"
+    "start": "next start",
+    "check-types": "next typegen && tsc --noEmit"
   },
   "dependencies": {
-    "@focusUp/api": "workspace:*",
     "@focusUp/env": "workspace:*",
     "@focusUp/shared-types": "workspace:*",
     "@focusUp/ui": "workspace:*",
     "@hookform/resolvers": "^3.10.0",
     "@livekit/components-react": "^2.9.20",
-    "@orpc/client": "catalog:",
-    "@orpc/server": "catalog:",
-    "@orpc/tanstack-query": "^1.13.6",
-    "@prisma/client": "catalog:",
     "@tanstack/react-query": "^5.90.12",
     "babel-plugin-react-compiler": "^1.0.0",
     "dotenv": "catalog:",

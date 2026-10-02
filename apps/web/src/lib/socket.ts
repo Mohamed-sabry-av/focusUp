@@ -1,11 +1,12 @@
 import { io, Socket } from 'socket.io-client';
+import { env } from '@focusUp/env/web';
 
 let socket: Socket | null = null;
 
 export function getSocket(): Socket {
   if (!socket) {
     socket = io(
-      (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000') + '/notifications',
+      env.NEXT_PUBLIC_SERVER_URL + '/notifications',
       {
         withCredentials: true,
         autoConnect: false,

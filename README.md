@@ -1,97 +1,62 @@
-# focusUp
+# FocusUp
 
-This project was created with [Better-T-Stack](https://github.com/AmanVarshney01/create-better-t-stack), a modern TypeScript stack that combines Next.js, Express, ORPC, and more.
+Virtual co-working: book a 1:1 focus session (25 / 50 / 75 min) with a partner and work side by side on video.
 
-## Features
+- Product spec: [docs/SPEC.md](docs/SPEC.md) (Word export: `docs/FocusUp_SPEC_v1.1.docx`)
+- Why things were decided: [docs/DECISIONS.md](docs/DECISIONS.md)
+- Code rules for people and agents: [AGENTS.md](AGENTS.md)
 
-- **TypeScript** - For type safety and improved developer experience
-- **Next.js** - Full-stack React framework
-- **TailwindCSS** - Utility-first CSS for rapid UI development
-- **Shared UI package** - shadcn/ui primitives live in `packages/ui`
-- **Express** - Fast, unopinionated web framework
-- **oRPC** - End-to-end type-safe APIs with OpenAPI integration
-- **Bun** - Runtime environment
-- **Prisma** - TypeScript-first ORM
-- **PostgreSQL** - Database engine
-- **Turborepo** - Optimized monorepo build system
-
-## Getting Started
-
-First, install the dependencies:
-
-```bash
-bun install
-```
-
-## Database Setup
-
-This project uses PostgreSQL with Prisma.
-
-1. Make sure you have a PostgreSQL database set up.
-2. Update your `apps/server/.env` file with your PostgreSQL connection details.
-
-3. Apply the schema to your database:
-
-```bash
-bun run db:push
-```
-
-Then, run the development server:
-
-```bash
-bun run dev
-```
-
-Open [http://localhost:3001](http://localhost:3001) in your browser to see the web application.
-The API is running at [http://localhost:3000](http://localhost:3000).
-
-## UI Customization
-
-React web apps in this stack share shadcn/ui primitives through `packages/ui`.
-
-- Change design tokens and global styles in `packages/ui/src/styles/globals.css`
-- Update shared primitives in `packages/ui/src/components/*`
-- Adjust shadcn aliases or style config in `packages/ui/components.json` and `apps/web/components.json`
-
-### Add more shared components
-
-Run this from the project root to add more primitives to the shared UI package:
-
-```bash
-npx shadcn@latest add accordion dialog popover sheet table -c packages/ui
-```
-
-Import shared components like this:
-
-```tsx
-import { Button } from "@focusUp/ui/components/button";
-```
-
-### Add app-specific blocks
-
-If you want to add app-specific blocks instead of shared primitives, run the shadcn CLI from `apps/web`.
-
-## Project Structure
+## Structure
 
 ```
 focusUp/
 ├── apps/
-│   ├── web/         # Frontend application (Next.js)
-│   └── server/      # Backend API (Express, ORPC)
+│   ├── api/            # Express REST + socket.io + background workers (the only backend)
+│   └── web/            # Next.js 16 frontend
 ├── packages/
-│   ├── ui/          # Shared shadcn/ui components and styles
-│   ├── api/         # API layer / business logic
-│   └── db/          # Database schema & queries
+│   ├── env/            # Validated environment variables (server + web)
+│   ├── shared-types/   # Zod schemas and types shared by api and web
+│   ├── ui/             # shadcn/ui components
+│   └── config/         # Shared tsconfig
+├── infrastructure/     # LiveKit config for local development
+└── docker-compose.yml  # Postgres, Redis, LiveKit for local development
 ```
 
-## Available Scripts
+## Local setup
 
-- `bun run dev`: Start all applications in development mode
-- `bun run build`: Build all applications
-- `bun run dev:web`: Start only the web application
-- `bun run dev:server`: Start only the server
-- `bun run check-types`: Check TypeScript types across all apps
-- `bun run db:push`: Push schema changes to database
-- `bun run db:generate`: Generate database client/types
-- `bun run db:migrate`: Run database migrations
-- `bun run db:studio`: Open database studio UI
+Requires [Bun](https://bun.sh) and Docker.
+
+```bash
+bun install
+cp apps/api/.env.example apps/api/.env       # then fill in the secrets
+echo 'NEXT_PUBLIC_SERVER_URL=http://localhost:3000' > apps/web/.env
+echo 'NEXT_PUBLIC_LIVEKIT_URL=ws://localhost:7880' >> apps/web/.env
+docker compose up -d
+bun run db:migrate
+bun run dev
+```
+
+| Service | URL |
+|---|---|
+| Web | http://localhost:3001 |
+| API | http://localhost:3000 (health: `/api/health`) |
+| LiveKit | ws://localhost:7880 |
+| Postgres | localhost:5437 |
+
+## Scripts
+
+| Command | What it does |
+|---|---|
+| `bun run dev` | Start api and web |
+| `bun run check-types` | Type-check every package |
+| `bun run test` | Run all tests |
+| `bun run db:migrate` | Create/apply a migration in development |
+| `bun run db:deploy` | Apply existing migrations (production) |
+| `bun run db:generate` | Regenerate the Prisma client |
+| `bun run db:studio` | Open Prisma Studio |
+
+## Database rules
+
+Schema changes go through a new migration: edit `apps/api/prisma/schema.prisma`, then run `bun run db:migrate`. Never edit an existing migration and never use `prisma db push`.
+
+`livekit/` and `meet/` are optional local clones of upstream LiveKit projects, kept for reference. They are git-ignored.
