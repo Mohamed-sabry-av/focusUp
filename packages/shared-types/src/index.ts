@@ -99,6 +99,14 @@ export type CreateReportInput = z.infer<typeof CreateReportInput>;
 
 // Booking a session (spec §5). The options are soft preferences used when matching.
 export const SESSION_DURATIONS = [25, 50, 75] as const;
+
+/** Cancelling a matched session at least this long before the start is free; later it is a late cancellation (a strike). */
+export const FREE_CANCEL_HOURS = 1;
+
+/** True when cancelling now is free. Used by the server and by the confirmation text in the browser. */
+export function isFreeCancellation(slot: Date | string, now: Date): boolean {
+  return new Date(slot).getTime() - now.getTime() >= FREE_CANCEL_HOURS * 60 * 60 * 1000;
+}
 export const CreateBookingInput = z.object({
   slotTime: z.string().datetime(),
   durationMin: z.union([z.literal(25), z.literal(50), z.literal(75)]),
@@ -178,6 +186,14 @@ export const SessionRoomPerson = z.object({
 });
 export type SessionRoomPerson = z.infer<typeof SessionRoomPerson>;
 
+export const SessionRoomPartner = SessionRoomPerson.extend({
+  /** How many sessions they have completed with other people. */
+  completedSessions: z.number().int(),
+  /** IANA time zone, for "their local time". */
+  timezone: z.string(),
+});
+export type SessionRoomPartner = z.infer<typeof SessionRoomPartner>;
+
 export const SessionRoomResponse = z.object({
   id: z.string(),
   status: z.nativeEnum(SessionStatus),
@@ -194,13 +210,45 @@ export const SessionRoomResponse = z.object({
     goal: z.string().nullable(),
     extensionsLeft: z.number().int(),
   }),
-  partner: SessionRoomPerson.nullable(),
+  partner: SessionRoomPartner.nullable(),
   partnerGoal: z.string().nullable(),
   /** Set when the person was paired with someone else; the browser moves to that session. */
   rematchedToSessionId: z.string().nullable(),
   canExtend: z.boolean(),
 });
 export type SessionRoomResponse = z.infer<typeof SessionRoomResponse>;
+
+export const TASK_TYPES = ["DESK", "WALK", "ANY"] as const;
+export const TaskType = z.enum(TASK_TYPES);
+export type TaskType = z.infer<typeof TaskType>;
+
+/** One of my upcoming sessions, as the dashboard shows it. The partner is shown by first name and last initial only. */
+export const UpcomingSession = z.object({
+  id: z.string(),
+  status: z.nativeEnum(SessionStatus),
+  isSolo: z.boolean(),
+  scheduledAt: z.string().datetime(),
+  durationMin: z.number().int(),
+  /** My booking for this session (used to cancel it). Null only if it cannot be found. */
+  bookingId: z.string().nullable(),
+  quiet: z.boolean(),
+  taskType: TaskType,
+  /** My session title (the goal I wrote). */
+  title: z.string().nullable(),
+  partner: z
+    .object({
+      id: z.string(),
+      /** First name and last initial, for example "Danielle H.". */
+      displayName: z.string(),
+      /** Null when the person hides their photo. */
+      avatarUrl: z.string().nullable(),
+      completedSessions: z.number().int(),
+      timezone: z.string(),
+      isFavorite: z.boolean(),
+    })
+    .nullable(),
+});
+export type UpcomingSession = z.infer<typeof UpcomingSession>;
 
 export const SessionTokenResponse = z.object({ token: z.string() });
 export type SessionTokenResponse = z.infer<typeof SessionTokenResponse>;

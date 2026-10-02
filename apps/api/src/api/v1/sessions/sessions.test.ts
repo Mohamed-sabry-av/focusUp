@@ -15,6 +15,13 @@ vi.mock('../../../lib/prisma', () => ({
       update: vi.fn(),
       findMany: vi.fn(),
       count: vi.fn(),
+      groupBy: vi.fn(),
+    },
+    bookingRequest: {
+      findMany: vi.fn(),
+    },
+    favorite: {
+      findMany: vi.fn(),
     },
     reflection: {
       findFirst: vi.fn(),
@@ -308,13 +315,49 @@ describe('Sessions Endpoints', () => {
         },
       ] as any);
 
+      (prisma.bookingRequest.findMany as any).mockResolvedValue([
+        { id: 'booking-1', sessionId: 'session-1', quiet: true, taskType: 'WALK' },
+      ]);
+      (prisma.favorite.findMany as any).mockResolvedValue([{ favoriteId: 'user-2' }]);
+      (prisma.session.groupBy as any).mockResolvedValue([]);
+
       const res = await request(app)
         .get('/api/v1/sessions/upcoming')
         .set('Cookie', [authCookie('user-1')]);
 
       expect(res.status).toBe(200);
       expect(res.body.data).toHaveLength(1);
-      expect(res.body.data[0].partner.id).toBe('user-2');
+      expect(res.body.data[0]).toMatchObject({
+        id: 'session-1',
+        bookingId: 'booking-1',
+        quiet: true,
+        taskType: 'WALK',
+        partner: { id: 'user-2', displayName: 'User T.', isFavorite: true, completedSessions: 0 },
+      });
+    });
+
+    it('never sends the full name, username or e-mail of the partner', async () => {
+      (prisma.user.findUnique as any).mockResolvedValue({
+        id: 'user-1',
+        isActive: true,
+        isBanned: false,
+        emailVerified: true,
+      } as any);
+      (prisma.session.findMany as any).mockResolvedValue([
+        { ...BASE_SESSION, scheduledAt: new Date(Date.now() + 3600000) },
+      ] as any);
+      (prisma.bookingRequest.findMany as any).mockResolvedValue([]);
+      (prisma.favorite.findMany as any).mockResolvedValue([]);
+      (prisma.session.groupBy as any).mockResolvedValue([]);
+
+      const res = await request(app)
+        .get('/api/v1/sessions/upcoming')
+        .set('Cookie', [authCookie('user-1')]);
+
+      const body = JSON.stringify(res.body);
+      expect(body).not.toContain('User Two');
+      expect(body).not.toContain('usertwo');
+      expect(body).not.toContain('user2@example.com');
     });
 
     it('should only return sessions within 7 days', async () => {

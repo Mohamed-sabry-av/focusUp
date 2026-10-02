@@ -3,7 +3,8 @@ import { SESSION_DURATIONS } from "@focusUp/shared-types";
 export const MIN_LEAD_TIME_MINUTES = 5;
 export const BOOKING_HORIZON_DAYS = 14;
 export const MAX_FUTURE_BOOKINGS = 3;
-export const FREE_CANCEL_HOURS = 1;
+// The cancellation rule is shared with the browser, so both always agree.
+export { FREE_CANCEL_HOURS, isFreeCancellation } from "@focusUp/shared-types";
 
 const MINUTE = 60 * 1000;
 const HOUR = 60 * MINUTE;
@@ -24,11 +25,6 @@ export function isFarEnough(slot: Date, now: Date): boolean {
 
 export function isWithinHorizon(slot: Date, now: Date): boolean {
   return slot.getTime() <= now.getTime() + BOOKING_HORIZON_DAYS * DAY;
-}
-
-/** True when cancelling now is free (at least an hour before the start). */
-export function isFreeCancellation(slot: Date, now: Date): boolean {
-  return slot.getTime() - now.getTime() >= FREE_CANCEL_HOURS * HOUR;
 }
 
 // ── Strikes (spec §6.1) ──────────────────────────────────────────

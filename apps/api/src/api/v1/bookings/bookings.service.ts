@@ -222,7 +222,7 @@ export class BookingsService {
    *   the session still counts, and the canceller gets one strike. The partner is
    *   treated the same as above.
    */
-  static async cancelBooking(bookingId: string, userId: string) {
+  static async cancelBooking(bookingId: string, userId: string, options: { waiveStrike?: boolean } = {}) {
     const booking = await prisma.bookingRequest.findUnique({ where: { id: bookingId } });
 
     if (!booking) {
@@ -251,7 +251,8 @@ export class BookingsService {
     }
 
     // ── Matched booking ───────────────────────────────────────────
-    const free = isFreeCancellation(booking.slotTime, new Date());
+    // Only the server itself waives the strike (for example when the person blocks their partner).
+    const free = options.waiveStrike === true || isFreeCancellation(booking.slotTime, new Date());
 
     const partnerBooking = await prisma.$transaction(async (tx) => {
       await tx.bookingRequest.update({

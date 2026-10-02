@@ -1,5 +1,6 @@
 import { prisma } from '../../../lib/prisma';
 import { AppError } from '../../../utils/errors';
+import { BookingsService } from '../bookings/bookings.service';
 
 export class BlocksService {
   static async blockUser(blockerId: string, blockedId: string): Promise<{ success: true }> {
@@ -32,7 +33,35 @@ export class BlocksService {
       }),
     ]);
 
+    await this.cancelSharedUpcomingSessions(blockerId, blockedId);
+
     return { success: true };
+  }
+
+  /**
+   * Blocking someone you are booked with cancels that session, with no strike for you (you should
+   * never be punished for protecting yourself). They go back to waiting and are re-matched.
+   */
+  private static async cancelSharedUpcomingSessions(blockerId: string, blockedId: string): Promise<void> {
+    const shared = await prisma.session.findMany({
+      where: {
+        status: 'CONFIRMED',
+        scheduledAt: { gt: new Date() },
+        OR: [
+          { user1Id: blockerId, user2Id: blockedId },
+          { user1Id: blockedId, user2Id: blockerId },
+        ],
+      },
+      select: { id: true },
+    });
+
+    for (const session of shared) {
+      const booking = await prisma.bookingRequest.findFirst({
+        where: { sessionId: session.id, userId: blockerId, status: 'MATCHED' },
+        select: { id: true },
+      });
+      if (booking) await BookingsService.cancelBooking(booking.id, blockerId, { waiveStrike: true });
+    }
   }
 
   static async unblockUser(blockerId: string, blockedId: string): Promise<{ success: true }> {

@@ -1,6 +1,9 @@
 import { SessionStatus } from '@prisma/client';
+import { SessionStatus as SessionStatusEnum, type UpcomingSession } from '@focusUp/shared-types';
 import { prisma } from '../../../lib/prisma';
+import { shortName } from '../../../lib/short-name';
 import { AppError } from '../../../utils/errors';
+import { completedSessionCounts } from './session-stats';
 
 export class SessionsService {
   /**
@@ -123,65 +126,78 @@ export class SessionsService {
   }
 
   /**
-   * Fetch upcoming sessions for the user within the next 7 days.
+   * My upcoming sessions: the next 7 days, plus one that has started and not ended (so the person
+   * can still join). Partners are shown by first name and last initial; their full name, username
+   * and e-mail never leave the server.
    */
-  static async getUpcomingSessions(userId: string) {
+  static async getUpcomingSessions(userId: string): Promise<UpcomingSession[]> {
     const now = new Date();
     const sevenDaysLater = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
-    // A session that has started but not ended is still "upcoming": the person must be able to join it.
     const LONGEST_SESSION_MS = 75 * 60 * 1000;
     const startedAfter = new Date(now.getTime() - LONGEST_SESSION_MS);
 
     const sessions = await prisma.session.findMany({
       where: {
         AND: [
-          {
-            OR: [
-              { user1Id: userId },
-              { user2Id: userId },
-            ],
-          },
+          { OR: [{ user1Id: userId }, { user2Id: userId }] },
           { scheduledAt: { gt: startedAfter, lt: sevenDaysLater } },
-          {
-            status: {
-              in: ['PENDING', 'CONFIRMED', 'ACTIVE'],
-            },
-          },
+          { status: { in: ['PENDING', 'CONFIRMED', 'ACTIVE'] } },
         ],
       },
       include: {
-        user1: {
-          select: {
-            id: true,
-            displayName: true,
-            username: true,
-            avatarUrl: true,
-          },
-        },
-        user2: {
-          select: {
-            id: true,
-            displayName: true,
-            username: true,
-            avatarUrl: true,
-          },
-        },
+        user1: { select: { id: true, displayName: true, avatarUrl: true, hidePhoto: true, timezone: true } },
+        user2: { select: { id: true, displayName: true, avatarUrl: true, hidePhoto: true, timezone: true } },
       },
-      orderBy: {
-        scheduledAt: 'asc',
-      },
+      orderBy: { scheduledAt: 'asc' },
     });
 
-    return sessions
-      .filter((session) => session.scheduledAt.getTime() + session.durationMin * 60 * 1000 > now.getTime())
-      .map((session) => {
-        const isUser1 = session.user1Id === userId;
-        const partner = isUser1 ? session.user2 : session.user1;
-        return {
-          ...session,
-          partner,
-        };
-      });
+    const running = sessions.filter(
+      (session) => session.scheduledAt.getTime() + session.durationMin * 60 * 1000 > now.getTime(),
+    );
+    if (running.length === 0) return [];
+
+    const partnerIds = running
+      .map((session) => (session.user1Id === userId ? session.user2Id : session.user1Id))
+      .filter((id): id is string => id !== null);
+
+    const [bookings, favorites, completed] = await Promise.all([
+      prisma.bookingRequest.findMany({
+        where: { userId, sessionId: { in: running.map((session) => session.id) } },
+        select: { id: true, sessionId: true, quiet: true, taskType: true },
+      }),
+      prisma.favorite.findMany({ where: { userId }, select: { favoriteId: true } }),
+      completedSessionCounts(partnerIds),
+    ]);
+    const bookingBySession = new Map(bookings.map((booking) => [booking.sessionId, booking]));
+    const favoriteIds = new Set(favorites.map((favorite) => favorite.favoriteId));
+
+    return running.map((session) => {
+      const isUser1 = session.user1Id === userId;
+      const partner = isUser1 ? session.user2 : session.user1;
+      const booking = bookingBySession.get(session.id);
+
+      return {
+        id: session.id,
+        status: SessionStatusEnum[session.status],
+        isSolo: session.isSolo,
+        scheduledAt: session.scheduledAt.toISOString(),
+        durationMin: session.durationMin,
+        bookingId: booking?.id ?? null,
+        quiet: booking?.quiet ?? false,
+        taskType: booking?.taskType ?? 'ANY',
+        title: isUser1 ? session.user1Goal : session.user2Goal,
+        partner: partner
+          ? {
+              id: partner.id,
+              displayName: shortName(partner.displayName),
+              avatarUrl: partner.hidePhoto ? null : partner.avatarUrl,
+              completedSessions: completed.get(partner.id) ?? 0,
+              timezone: partner.timezone,
+              isFavorite: favoriteIds.has(partner.id),
+            }
+          : null,
+      };
+    });
   }
 
   /**

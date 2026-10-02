@@ -12,7 +12,9 @@ import {
   personalEnd,
   sessionEnd,
 } from '../../../lib/session-phase';
+import { shortName } from '../../../lib/short-name';
 import { AppError } from '../../../utils/errors';
+import { completedSessionCounts } from './session-stats';
 
 const MINUTE = 60 * 1000;
 /** "Keep going" is offered during the last minutes and for a short while after the end. */
@@ -27,8 +29,8 @@ async function loadSession(sessionId: string, userId: string) {
   const session = await prisma.session.findUnique({
     where: { id: sessionId },
     include: {
-      user1: { select: { id: true, displayName: true, avatarUrl: true, hidePhoto: true } },
-      user2: { select: { id: true, displayName: true, avatarUrl: true, hidePhoto: true } },
+      user1: { select: { id: true, displayName: true, avatarUrl: true, hidePhoto: true, timezone: true } },
+      user2: { select: { id: true, displayName: true, avatarUrl: true, hidePhoto: true, timezone: true } },
       participants: true,
     },
   });
@@ -75,7 +77,10 @@ export class SessionRoomService {
   /** Everything the room screen needs, computed on the server. */
   static async getRoom(sessionId: string, userId: string, now: Date = new Date()): Promise<SessionRoomResponse> {
     const session = await loadSession(sessionId, userId);
-    const quiet = await quietByUser(sessionId);
+    const [quiet, completed] = await Promise.all([
+      quietByUser(sessionId),
+      completedSessionCounts([session.user1Id, session.user2Id].filter((id): id is string => id !== null)),
+    ]);
     const { phase, me, partnerId, partnerRow, extendedUntil } = phaseFor(session, userId, now);
 
     const isUser1 = session.user1Id === userId;
@@ -117,11 +122,13 @@ export class SessionRoomService {
       partner: partnerUser
         ? {
             id: partnerUser.id,
-            displayName: partnerUser.displayName,
+            displayName: shortName(partnerUser.displayName),
             // The API never sends the photo of someone who hides it.
             avatarUrl: partnerUser.hidePhoto ? null : partnerUser.avatarUrl,
             quiet: partnerId ? (quiet.get(partnerId) ?? false) : false,
             isPresent: partnerRow?.isPresent ?? false,
+            completedSessions: completed.get(partnerUser.id) ?? 0,
+            timezone: partnerUser.timezone,
           }
         : null,
       partnerGoal: isUser1 ? session.user2Goal : session.user1Goal,
