@@ -1,4 +1,5 @@
 import type { Request, Response, NextFunction } from 'express';
+import type { CreateBookingInput } from '@focusUp/shared-types';
 import { BookingsService } from './bookings.service';
 import { AppError } from '../../../utils/errors';
 
@@ -14,16 +15,13 @@ export class BookingsController {
     try {
       if (!req.user) throw new AppError('Not authenticated', 401);
 
-      const { slotTime, durationMin } = req.body as {
-        slotTime: string;
-        durationMin: number;
-      };
+      // The body was already checked and given its defaults by validate(CreateBookingInput)
+      const { slotTime, ...options } = req.body as CreateBookingInput;
 
-      const result = await BookingsService.createBooking(
-        req.user.id,
-        new Date(slotTime),
-        durationMin
-      );
+      const result = await BookingsService.createBooking(req.user.id, {
+        ...options,
+        slotTime: new Date(slotTime),
+      });
 
       res.status(201).json({ data: result, statusCode: 201 });
     } catch (error) {

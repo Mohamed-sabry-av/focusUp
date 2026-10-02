@@ -14,6 +14,9 @@ vi.mock('../../../lib/prisma', () => ({
       count: vi.fn(),
       findMany: vi.fn(),
     },
+    bookingRequest: {
+      count: vi.fn(),
+    },
   },
 }));
 
@@ -63,9 +66,13 @@ describe('Users Endpoints', () => {
       (prisma.user.findUnique as any).mockResolvedValue({
         id: 'user-1',
         planTier: PlanTier.FREE,
+        timezone: 'Africa/Cairo',
         isActive: true,
         isBanned: false,
       } as any);
+
+      // sessions used this week (bookings that count toward the free allowance)
+      (prisma.bookingRequest.count as any).mockResolvedValueOnce(4);
 
       // sessionsThisWeek count
       (prisma.session.count as any).mockResolvedValueOnce(2);
@@ -85,7 +92,9 @@ describe('Users Endpoints', () => {
       expect(res.status).toBe(200);
       expect(res.body.data.sessionsThisWeek).toBe(2);
       expect(res.body.data.focusHoursThisWeek).toBe(1.3); // (50+25)/60 = 1.25 -> 1.3
-      expect(res.body.data.sessionLimit).toBe(3);
+      // The free weekly limit is switched off during the beta, so there is no limit to show
+      expect(res.body.data.sessionLimit).toBeNull();
+      expect(res.body.data.sessionsUsedThisWeek).toBe(4);
       expect(res.body.data.planTier).toBe(PlanTier.FREE);
     });
 
@@ -93,12 +102,14 @@ describe('Users Endpoints', () => {
       (prisma.user.findUnique as any).mockResolvedValue({
         id: 'user-1',
         planTier: PlanTier.PRO,
+        timezone: 'UTC',
         isActive: true,
         isBanned: false,
       } as any);
 
       (prisma.session.count as any).mockResolvedValue(0);
       (prisma.session.findMany as any).mockResolvedValue([]);
+      (prisma.bookingRequest.count as any).mockResolvedValue(0);
 
       const res = await request(app)
         .get('/api/v1/users/me/stats')

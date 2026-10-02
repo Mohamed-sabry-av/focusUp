@@ -5,7 +5,8 @@ import type {
   UpdatePreferencesInput,
 } from "@focusUp/shared-types";
 import { AppError } from "../../../utils/errors";
-import { SessionStatus, PlanTier } from "@prisma/client";
+import { SessionStatus } from "@prisma/client";
+import { getQuotaStatus } from "../../../services/quota.service";
 
 export class UsersService {
   private static getStartOfWeek(date: Date) {
@@ -63,7 +64,7 @@ export class UsersService {
   static async getUserStats(userId: string) {
     const user = await prisma.user.findUnique({
       where: { id: userId },
-      select: { planTier: true },
+      select: { id: true, planTier: true, timezone: true },
     });
 
     if (!user) {
@@ -154,14 +155,15 @@ export class UsersService {
       }
     }
 
-    const sessionLimit = user.planTier === PlanTier.FREE ? 3 : null;
+    // Weekly free-plan allowance: Monday to Sunday in the user's timezone, null when not enforced.
+    const quota = await getQuotaStatus(user, now);
 
     return {
       sessionsThisWeek,
       focusHoursThisWeek,
       currentStreak,
-      sessionsUsedThisWeek: sessionsThisWeek,
-      sessionLimit,
+      sessionsUsedThisWeek: quota.used,
+      sessionLimit: quota.limit,
       planTier: user.planTier,
     };
   }
@@ -199,7 +201,9 @@ export class UsersService {
             categories: true,
             preferredLength: true,
             planTier: true,
-            strikeCount: true,
+            suspendedUntil: true,
+            hidePhoto: true,
+            dataSaver: true,
             isActive: true,
             isBanned: true,
             emailVerified: true,

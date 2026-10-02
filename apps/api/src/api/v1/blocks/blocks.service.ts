@@ -18,10 +18,18 @@ export class BlocksService {
     });
     if (existing) throw new AppError('User is already blocked', 409);
 
-    // 4. Create bidirectional blocks in a transaction
+    // 4. Create bidirectional blocks in a transaction, and drop any favorite between the two
     await prisma.$transaction([
       prisma.block.create({ data: { blockerId, blockedId } }),
       prisma.block.create({ data: { blockerId: blockedId, blockedId: blockerId } }),
+      prisma.favorite.deleteMany({
+        where: {
+          OR: [
+            { userId: blockerId, favoriteId: blockedId },
+            { userId: blockedId, favoriteId: blockerId },
+          ],
+        },
+      }),
     ]);
 
     return { success: true };

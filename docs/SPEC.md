@@ -8,7 +8,7 @@ Items changed in v1.1 are marked **[v1.1]**. The reasons are logged in `docs/DEC
 
 - **What:** A web app where people book a 1:1 virtual co-working session (25 / 50 / 75 min) with a partner, so both actually start and finish their work. Body doubling, with the Focusmate experience.
 - **For whom:** university students, high-school students, freelancers and remote employees in the Arab world. Entry channels: NTI, ITIDA, university groups, freelancer communities, social content.
-- **Why us vs Focusmate:** cheaper with local payment, a more generous free tier (6 sessions/week), camera optional (unlike Focusmate), optional same-gender matching, a "hide my photo" privacy option, built for Arab users (Arabic in v2).
+- **Why us vs Focusmate:** cheaper with local payment, a more generous free tier (6 sessions/week), camera optional (unlike Focusmate), a "hide my photo" privacy option, built for Arab users (Arabic in v2).
 - **MVP shape:** web only, English UI, scheduled booking only, 1:1 only. **[v1.1]** Built on the existing focusUp repo: Next.js 16 + Express REST (`apps/api`) + Prisma + PostgreSQL 17 + self-hosted LiveKit, all on one server with one domain. No Redis.
 - **Success at 3 months after launch:** 100 weekly active users (WAU = users who completed ≥ 1 session that week).
 - **Owner & capacity:** solo founder, 20+ hours/week, infra budget < $50/month.
@@ -42,8 +42,8 @@ Legend used in this doc:
 | 14 | Desk / Walk | Session type labels kept as in Focusmate. Soft preference | [A] confirm |
 | 15 | Mic during focus | Optional (user decides) | [D] |
 | 16 | Start / end ritual | Written goal + optional short voice check-in, and the same at the end | [D] |
-| 17 | Matching extras | Optional same-gender; favorites first | [D] |
-| 18 | No partner found | **[v1.1]** At T-10 drop same-gender for "flexible" bookings → rematch offered at T+1 → solo session at T+3 (no quota, no strike) | [D] |
+| 17 | Matching extras | Favorites first. **[v1.1]** Same-gender matching is deferred until after the beta | [D] |
+| 18 | No partner found | **[v1.1]** Rematch offered at T+1 → solo session at T+3 (no quota, no strike). The T-10 relax step only applied to same-gender, so it waits with that feature | [D] |
 | 19 | Strikes | Lighter policy: 5 strikes in 30 days → 3-day suspension | [D] |
 | 20 | Sign-up | **[v1.1]** Email + password and Google only. No phone (OTP) or Facebook sign-in | [D] |
 | 21 | Onboarding | Name + photo only | [D] |
@@ -107,7 +107,7 @@ Legend used in this doc:
 | Sign-up/login: email + password (with email verification), Google | Yes | Yes |
 | Onboarding: display name + photo; timezone auto-detected from the browser | Yes | Yes |
 | Booking calendar: 14 days, 15-minute start slots, 25/50/75 min, booked people shown | Yes | Yes |
-| Booking options: camera on/off, Quiet, Desk/Walk, same-gender (optional), "flexible" | Yes | Yes |
+| Booking options: camera on/off, Quiet, Desk/Walk ("flexible" is stored for later) | Yes | Yes |
 | Matching engine (§5): favorites first, blocks respected, locks at booking | Yes | Yes |
 | Session room on LiveKit: video, audio, timer, goal, task list, text chat, opt-in screen share, report & block | Yes | Yes |
 | No-show handling: rematch at T+1, solo fallback at T+3 (§5.4) | Yes | Yes |
@@ -187,7 +187,6 @@ Two bookings are compatible when all hard filters match:
 |---|---|
 | Same start time | Hard |
 | Same duration | Hard |
-| Same-gender requested by either side → genders must match | Hard, only if requested |
 | Not blocked in either direction | Hard |
 | Both active, not suspended/banned | Hard |
 | **[v1.1]** Camera on/off | Soft: prefer the same choice; a cross-match shows the "Camera off" badge |
@@ -197,15 +196,15 @@ Two bookings are compatible when all hard filters match:
 
 **[v1.1]** Order among compatible waiting bookings [A]: favorites → same camera choice → same Quiet choice → same Desk/Walk → oldest booking.
 
-Gender is not asked at onboarding. It is asked only when a user turns on "same-gender" for the first time.
+**[v1.1]** Same-gender matching is deferred until after the beta: no gender field is stored and no hard filter exists yet. When it returns, gender is asked only the first time someone turns it on.
 
-With camera and Quiet as soft preferences, each start time has only 3 pools (one per duration), plus a split for users who ask for same-gender. v1 had 12.
+With camera and Quiet as soft preferences, each start time has only 3 pools (one per duration), v1 had 12.
 
 ### 5.3 When matching runs
 
 - **On booking:** look for a compatible pending booking in the order above. If found → create the session and notify both. **[v1.1]** The match is locked.
 - **[v1.1] Waiting:** if no one is found, the booking waits and is matched when a compatible user books the same slot.
-- **T-10 minutes:** for still-unmatched bookings marked "flexible", drop the same-gender filter (only if that user asked for it) and try again.
+- **T-10 minutes:** nothing to relax yet (the T-10 step only dropped the same-gender filter, which is deferred).
 - **[v1.1] T+1 minute:** users whose partner hasn't joined, and still-unmatched users, are offered a rematch with another available compatible user.
 - **[v1.1] T+3 minutes:** still no partner → solo offer.
 
@@ -327,7 +326,6 @@ Jobs are stored in Postgres, so they survive restarts and are included in databa
 | Job | Trigger | Idempotency |
 |---|---|---|
 | reminder | T-24h, T-1h, T-10m per booking | Singleton key per booking + reminder; skipped if booking cancelled |
-| relax-match | T-10m for unmatched flexible bookings with same-gender on | Skipped if already matched or `Booking.relaxedAt` set |
 | no-show-check | T+5m: mark absent user NO_SHOW, add strike | Skipped unless booking is still MATCHED with no join |
 | session-close | End + 2 min | Skipped if session already COMPLETED |
 | send-email / send-push | Queued by the jobs above and by app events | pg-boss retries with backoff; failures stay visible |
@@ -354,7 +352,7 @@ model User {
   hidePhoto      Boolean    @default(false)  // [v1.1]
   dataSaver      Boolean    @default(false)  // [v1.1] caps video at 360p
   timezone       String     @default("UTC")
-  gender         Gender?                     // asked only when same-gender is used
+  // gender: added when same-gender matching returns (deferred past the beta)
   role           Role       @default(USER)   // USER / ADMIN
   status         UserStatus @default(ACTIVE) // ACTIVE / SUSPENDED / BANNED
   suspendedUntil DateTime?
@@ -442,7 +440,6 @@ Checked in mid-December 2026:
 | **[v1.1]** Video fails on restrictive networks | Users can't connect (Egyptian mobile carriers, university and office Wi-Fi) | TURN/TLS on port 443. Test from Vodafone, Orange, e& and WE before the beta |
 | **[v1.1]** One server, no backups yet | Outage or data loss affects everyone | Decide backups before beta invites. Uptime monitor |
 | Low liquidity (no partners at odd hours) | Users churn | v1.1 cuts pools from 12 to 3 per start time; calendar shows booked people; rematch + solo fallback; beta invites focused on peak hours |
-| Same-gender requests split pools | Lower match rate for those users | Monitor match rate per combination; T-10 relax for flexible bookings |
 | **[v1.1]** Server bandwidth | Video traffic exceeds the plan's allowance | Up to ~1.3 GB per 50-min HD session (less on weak connections or with Data saver); pick a plan with large included traffic |
 | Harassment / inappropriate behavior | Safety | Instant report + block, auto-suspend, manual review |
 | **[v1.1]** Screen share with strangers | Private info leaks or inappropriate content | Opt-in only, never auto-start, covered by report |

@@ -24,6 +24,12 @@ export const env = createEnv({
     GOOGLE_CLIENT_ID: z.string().min(1).optional(),
     GOOGLE_CLIENT_SECRET: z.string().min(1).optional(),
 
+    // Free plan weekly limit (6 sessions). Off during the free beta; turned on with payments.
+    QUOTA_ENFORCED: z
+      .enum(["true", "false"])
+      .default("false")
+      .transform((value) => value === "true"),
+
     // Email. Without a key, emails are logged (development and test only).
     RESEND_API_KEY: z.string().min(1).optional(),
     EMAIL_FROM: z.string().min(3).default("FocusUp <no-reply@localhost>"),

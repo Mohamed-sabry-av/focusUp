@@ -12,7 +12,7 @@
 1. [AUTH](#auth)
 2. [USERS](#users)
 3. [SESSIONS](#sessions)
-4. [BOOKINGS](#bookings)
+4. [BOOKINGS](#bookings) (and [FAVORITES](#favorites))
 5. [REFLECTIONS](#reflections)
 6. [REPORTS](#reports)
 7. [BLOCKS](#blocks)
@@ -67,7 +67,7 @@ A banned or deactivated user gets `403` on every `/api/v1` route straight away, 
 
 - **Auth**: Required
 - **Body**: None
-- **Response**: `200 { data: { user: { id, email, displayName, username, avatarUrl, timezone, categories, preferredLength, planTier, strikeCount, isActive, isBanned, emailVerified, isAdmin, createdAt, updatedAt } }, statusCode: 200 }`
+- **Response**: `200 { data: { user: { id, email, displayName, username, avatarUrl, timezone, categories, preferredLength, planTier, suspendedUntil, hidePhoto, dataSaver, isActive, isBanned, emailVerified, isAdmin, createdAt, updatedAt } }, statusCode: 200 }`
 - **Errors**: `401` not authenticated, `404` user not found
 
 ---
@@ -190,25 +190,26 @@ A banned or deactivated user gets `403` on every `/api/v1` route straight away, 
 ## BOOKINGS
 
 > All `/api/v1/bookings` routes require a valid session.  
-> Booking creation is rate-limited to **10 req/min per user** (applied at the app level).
+> Creating a booking also needs a **verified email**.
 
 ---
 
 ### POST /api/v1/bookings
 
-- **Auth**: Required
-- **Body**: `{ slotTime: string (ISO 8601 datetime), durationMin: 25 | 50 | 75 }`
-- **Response**: `201 { data: { bookingRequest | session }, statusCode: 201 }`
-- **Notes**: Attempts immediate matching against an existing compatible pending booking. If matched, a `Session` is created and both booking requests are resolved. If no match, a `BookingRequest` is stored as `PENDING`. Slot times are quantised to 15-minute increments.
-- **Errors**: `400` validation failure (invalid datetime, unsupported duration), `401` not authenticated, `409` duplicate booking for same slot
+- **Auth**: Required, verified email
+- **Body**: `{ slotTime: ISO 8601 datetime, durationMin: 25 | 50 | 75, cameraOn?: boolean (default true), quiet?: boolean (default false), taskType?: "DESK" | "WALK" (default "DESK"), flexible?: boolean (default true) }`
+- **Response**: `201 { data: { bookingRequest, session }, statusCode: 201 }`. `session` is `null` when nobody compatible is waiting yet; the booking is then `PENDING`.
+- **Matching**: tried at once, and the match is final. Two bookings are compatible when they have the same start time and duration, are different people, have not blocked each other, and the other person is active, not banned and not suspended. **Camera, Quiet and Desk/Walk never block a match**: they only decide who is picked first among compatible people (favorites, then same camera, same Quiet, same Desk/Walk, then whoever waited longest).
+- **Rules**: starts at least 5 minutes ahead, on a quarter hour, at most 14 days ahead; at most 3 upcoming bookings; no overlap with your own other bookings; not suspended; the weekly free limit (6 sessions, Monday to Sunday in your timezone) applies only when `QUOTA_ENFORCED` is on, which it is not during the beta.
+- **Errors**: `400` invalid input, past or too-close time, not a quarter hour, more than 14 days ahead; `401` not authenticated; `403` email not verified, account suspended (`"… suspended until <date> …"`), or free limit reached; `409` a booking already at that time or overlapping, 3 upcoming bookings already, or too many people booking at once (try again)
 
 ---
 
 ### GET /api/v1/bookings
 
 - **Auth**: Required
-- **Query**: `?status=PENDING|MATCHED|CANCELLED&page=1&limit=10`
-- **Response**: `200 { data: [...bookingRequests], total, page, totalPages, statusCode: 200 }`
+- **Query**: `?status=PENDING|MATCHED|CANCELLED|LATE_CANCELLED|EXPIRED|NO_SHOW|SOLO|COMPLETED&page=1&limit=10`
+- **Response**: `200 { data: [...bookingRequests with partner], total, page, totalPages }`
 - **Errors**: `401` not authenticated
 
 ---
@@ -216,19 +217,36 @@ A banned or deactivated user gets `403` on every `/api/v1` route straight away, 
 ### GET /api/v1/bookings/available
 
 - **Auth**: Required
-- **Query**: `?date=<ISO datetime>&days=3`
-- **Response**: `200 { data: [...availableSlots], statusCode: 200 }`
-- **Notes**: Returns pending booking requests from other users that are compatible with the caller (no blocks, matching duration). Useful for displaying a calendar of joinable slots. Defaults: `date` = now, `days` = 3.
+- **Query**: `?date=<ISO date>&days=3`
+- **Response**: `200 { data: { bookings: [{ id, slotTime, durationMin, cameraOn, quiet, taskType, isFavorite, user: { id, displayName, username, avatarUrl, initials } }] } }`
+- **Notes**: People who are waiting for a partner, for the calendar. Blocked people (either direction), banned and suspended people are left out. `avatarUrl` is `null` when the person chose to hide their photo; the photo URL is never sent in that case, use `initials`.
 - **Errors**: `401` not authenticated
 
 ---
 
 ### DELETE /api/v1/bookings/:id
 
-- **Auth**: Required
-- **Params**: `id` — booking request cuid
-- **Response**: `200 { data: { ...cancelledBookingRequest }, statusCode: 200 }`
-- **Errors**: `401` not authenticated, `403` not the owner of this booking request, `404` booking request not found, `409` already matched or cancelled
+- **Auth**: Required (owner only)
+- **Response**: `200 { data: { success: true, message: "Booking cancelled" } }`
+- **Waiting booking**: cancelled (`CANCELLED`), nothing else changes.
+- **Matched, at least 1 hour before the start**: free. The booking becomes `CANCELLED` and does not use up a session. The session is cancelled and the partner goes back to waiting and is matched again if possible.
+- **Matched, less than 1 hour before**: allowed, but the booking becomes `LATE_CANCELLED`, still counts toward the weekly limit, and the person gets **1 strike**. The partner is treated as above.
+- **Strikes**: 5 strikes inside a rolling 30 days suspend the account for 3 days (no new bookings; signing in still works). Strikes are never deleted, they only stop counting after 30 days. A no-show earns a strike too.
+- **Errors**: `401` not authenticated, `403` not the owner, `404` not found, `400` already cancelled, expired or finished
+
+---
+
+## FAVORITES
+
+> All `/api/v1/favorites` routes require a valid session.
+
+Favorites are matched first (see POST /bookings). Blocking someone removes any favorite between you in both directions.
+
+| Endpoint | Body | Result |
+|---|---|---|
+| `POST /api/v1/favorites` | `{ favoriteId }` | `201`. Idempotent. `400` yourself, `404` user not found, `409` blocked in either direction |
+| `DELETE /api/v1/favorites/:favoriteId` | — | `200`. Idempotent |
+| `GET /api/v1/favorites` | — | `200 { data: { favorites: [{ id, displayName, username, avatarUrl, favoritedAt }] } }` |
 
 ---
 
@@ -352,7 +370,7 @@ A banned or deactivated user gets `403` on every `/api/v1` route straight away, 
 - **Auth**: Required + Admin
 - **Params**: `id` — user cuid
 - **Response**: `200 { data: { user: { ...fullUserRecord } }, statusCode: 200 }`
-- **Notes**: Returns full user details including `strikeCount`, `isBanned`, `isActive`, and related data.
+- **Notes**: Returns user details including `strikesInLast30Days`, `suspendedUntil`, `isBanned`, `isActive`, and received reports.
 - **Errors**: `401` not authenticated, `403` not an admin, `404` user not found
 
 ---
@@ -385,7 +403,7 @@ A banned or deactivated user gets `403` on every `/api/v1` route straight away, 
 - **Params**: `id` — user cuid
 - **Body**: `{ reason: string (min 1) }`
 - **Response**: `200 { data: { ...result }, statusCode: 200 }`
-- **Notes**: Increments `strikeCount`. When `strikeCount` reaches the threshold (3 by default), the user may be auto-banned depending on service logic.
+- **Notes**: Adds a strike (reason `ADMIN`, with your text as the note). Like every strike it counts for 30 days; the 5th inside that window suspends the user for 3 days. Response: `{ userId, strikesInLast30Days, suspendedUntil, reason }`.
 - **Errors**: `400` missing reason, `401` not authenticated, `403` not an admin, `404` user not found
 
 ---

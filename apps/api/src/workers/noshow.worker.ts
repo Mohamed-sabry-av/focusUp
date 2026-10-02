@@ -6,6 +6,7 @@ import { redis } from "../lib/redis";
 import { NotificationService } from "../services/notification.service";
 import { EmailService } from "../services/email.service";
 import { removeJob } from "../queues/helpers";
+import { addStrike } from "../services/strikes.service";
 
 export interface NoshowJobData {
   sessionId: string;
@@ -53,32 +54,32 @@ export async function processNoshowJob(job: Job<NoshowJobData>): Promise<void> {
     joinedUserIds.includes(id),
   );
 
-  // Handle absent users: increment strike, warn at 3, ban at 5
+  // Absent users: their booking becomes NO_SHOW and earns one strike. Retried jobs are
+  // safe: a booking earns at most one strike per reason.
   for (const userId of absentUserIds) {
-    const updatedUser = await prisma.user.update({
-      where: { id: userId },
-      data: { strikeCount: { increment: 1 } },
+    const booking = await prisma.bookingRequest.findFirst({
+      where: { sessionId, userId },
+      select: { id: true },
     });
-
-    const userRecord =
-      userId === session.user1Id ? session.user1 : session.user2;
-
-    if (updatedUser.strikeCount === 3 && userRecord) {
-      await EmailService.sendStrikeWarning({
-        to: userRecord.email,
-        strikeCount: 3,
+    if (booking) {
+      await prisma.bookingRequest.update({
+        where: { id: booking.id },
+        data: { status: "NO_SHOW" },
       });
     }
+    await addStrike({
+      userId,
+      reason: "NO_SHOW",
+      bookingRequestId: booking?.id,
+    });
+  }
 
-    if (updatedUser.strikeCount >= 5) {
-      await prisma.user.update({
-        where: { id: userId },
-        data: { isBanned: true },
-      });
-      if (userRecord) {
-        await EmailService.sendBanNotification({ to: userRecord.email });
-      }
-    }
+  // Present users did nothing wrong: their session does not count toward the weekly quota.
+  if (presentUserIds.length > 0) {
+    await prisma.bookingRequest.updateMany({
+      where: { sessionId, userId: { in: presentUserIds } },
+      data: { countsToQuota: false },
+    });
   }
 
   // Notify present users via WebSocket + email

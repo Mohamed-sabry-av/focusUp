@@ -1,6 +1,7 @@
 import { prisma } from "../../../lib/prisma";
 import { AppError } from "../../../utils/errors";
 import { EmailService } from "../../../services/email.service";
+import { addStrike, countRecentStrikes } from "../../../services/strikes.service";
 import type { ReportStatus } from "@prisma/client";
 
 export class AdminService {
@@ -66,7 +67,7 @@ export class AdminService {
   }
 
   /**
-   * Get user details including strikeCount, isBanned, and report history (received).
+   * Get user details including recent strikes, suspension, isBanned, and report history (received).
    */
   static async getUserDetails(userId: string) {
     const user = await prisma.user.findUnique({
@@ -78,7 +79,7 @@ export class AdminService {
         username: true,
         avatarUrl: true,
         planTier: true,
-        strikeCount: true,
+        suspendedUntil: true,
         isBanned: true,
         isActive: true,
         isAdmin: true,
@@ -95,7 +96,7 @@ export class AdminService {
 
     if (!user) throw new AppError("User not found", 404);
 
-    return user;
+    return { ...user, strikesInLast30Days: await countRecentStrikes(userId) };
   }
 
   /**
@@ -134,35 +135,19 @@ export class AdminService {
 
   /**
    * P3-04: Add a manual strike to a user with a reason.
-   * At strikeCount === 3: send strike warning email.
-   * At strikeCount >= 5: ban the user and send ban notification email.
-   * Strikes are immutable — never decremented.
+   * Counts like any other strike: the 5th inside 30 days suspends the user for 3 days.
+   * Strikes are immutable. They only stop counting after 30 days.
    */
   static async addManualStrike(userId: string, reason: string) {
     const user = await prisma.user.findUnique({ where: { id: userId } });
     if (!user) throw new AppError("User not found", 404);
 
-    const updated = await prisma.user.update({
-      where: { id: userId },
-      data: { strikeCount: { increment: 1 } },
-    });
-
-    if (updated.strikeCount === 3) {
-      await EmailService.sendStrikeWarning({ to: user.email, strikeCount: 3 });
-    }
-
-    if (updated.strikeCount >= 5) {
-      await prisma.user.update({
-        where: { id: userId },
-        data: { isBanned: true },
-      });
-      await EmailService.sendBanNotification({ to: user.email });
-    }
+    const result = await addStrike({ userId, reason: "ADMIN", note: reason });
 
     return {
       userId,
-      strikeCount: updated.strikeCount,
-      isBanned: updated.strikeCount >= 5,
+      strikesInLast30Days: result.strikesInWindow,
+      suspendedUntil: result.suspendedUntil,
       reason,
     };
   }

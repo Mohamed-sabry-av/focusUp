@@ -97,6 +97,23 @@ export const CreateReportInput = z.object({
 });
 export type CreateReportInput = z.infer<typeof CreateReportInput>;
 
+// Booking a session (spec §5). The options are soft preferences used when matching.
+export const SESSION_DURATIONS = [25, 50, 75] as const;
+export const CreateBookingInput = z.object({
+  slotTime: z.string().datetime(),
+  durationMin: z.union([z.literal(25), z.literal(50), z.literal(75)]),
+  cameraOn: z.boolean().default(true),
+  quiet: z.boolean().default(false),
+  taskType: z.enum(["DESK", "WALK"]).default("DESK"),
+  flexible: z.boolean().default(true),
+});
+export type CreateBookingInput = z.infer<typeof CreateBookingInput>;
+
+export const CreateFavoriteInput = z.object({
+  favoriteId: z.string().cuid(),
+});
+export type CreateFavoriteInput = z.infer<typeof CreateFavoriteInput>;
+
 export const CreateBlockInput = z.object({
   blockedId: z.string().cuid(),
 });

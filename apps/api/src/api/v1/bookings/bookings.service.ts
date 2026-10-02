@@ -1,6 +1,18 @@
+import { Prisma } from '@prisma/client';
+import type { CreateBookingInput } from '@focusUp/shared-types';
+
+import {
+  MAX_FUTURE_BOOKINGS,
+  BOOKING_HORIZON_DAYS,
+  isFarEnough,
+  isFreeCancellation,
+  isOnQuarterHour,
+  isSupportedDuration,
+  isWithinHorizon,
+} from '../../../lib/booking-rules';
 import { prisma } from '../../../lib/prisma';
-import { AppError } from '../../../utils/errors';
-import { MatchingService } from '../matching/matching.service';
+import { withSerializableRetry } from '../../../lib/transactions';
+import { FREE_WEEKLY_LIMIT } from '../../../lib/quota';
 import {
   scheduleNoshowCheck,
   scheduleReminders,
@@ -8,160 +20,141 @@ import {
   removeJob,
 } from '../../../queues/helpers';
 import { NotificationService } from '../../../services/notification.service';
+import { isOverQuota } from '../../../services/quota.service';
+import { addStrike } from '../../../services/strikes.service';
+import { AppError } from '../../../utils/errors';
+import { FavoritesService } from '../favorites/favorites.service';
+import { MatchingService } from '../matching/matching.service';
+
+const MINUTE = 60 * 1000;
+
+export type CreateBookingParams = Omit<CreateBookingInput, 'slotTime'> & { slotTime: Date };
+
+function initialsOf(displayName: string): string {
+  const letters = displayName
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((word) => word.charAt(0).toUpperCase());
+  return letters.join('') || '?';
+}
 
 export class BookingsService {
   /**
-   * Create a new booking request and attempt immediate matching.
+   * Create a booking and try to match it at once (spec §5).
    *
-   * Validations (in order):
-   * a) slotTime > now + 5 minutes
-   * b) slotTime on 15-minute boundary
-   * c) durationMin ∈ {25, 50, 75}
-   * d) User email verified
-   * e) Free tier weekly limit (3 sessions)
-   * f) No duplicate booking for same slot
-   * g) No overlapping confirmed/active session
+   * Checks, in order: at least 5 minutes ahead, on a quarter hour, a 25/50/75
+   * minute session, no more than 14 days ahead, email verified, not suspended,
+   * weekly free limit (only when switched on), then inside one serializable
+   * transaction: no overlapping booking of your own and at most 3 upcoming ones.
    */
-  static async createBooking(
-    userId: string,
-    slotTime: Date,
-    durationMin: number
-  ) {
-    // a) slotTime must be in the future (> now + 5 minutes minimum lead time)
-    const minLeadTime = new Date(Date.now() + 5 * 60 * 1000);
-    if (slotTime <= minLeadTime) {
-      throw new AppError(
-        'Session time must be at least 5 minutes in the future',
-        400
-      );
-    }
+  static async createBooking(userId: string, params: CreateBookingParams) {
+    const { slotTime, durationMin } = params;
+    const now = new Date();
 
-    // b) slotTime minutes must be on a 15-minute boundary
-    if (slotTime.getMinutes() % 15 !== 0) {
+    if (!isFarEnough(slotTime, now)) {
+      throw new AppError('Session time must be at least 5 minutes in the future', 400);
+    }
+    if (!isOnQuarterHour(slotTime)) {
       throw new AppError(
         'Session times must start on a 15-minute boundary (XX:00, XX:15, XX:30, XX:45)',
-        400
+        400,
       );
     }
-
-    // c) durationMin must be 25, 50, or 75
-    if (![25, 50, 75].includes(durationMin)) {
+    if (!isSupportedDuration(durationMin)) {
       throw new AppError('Duration must be 25, 50, or 75 minutes', 400);
     }
+    if (!isWithinHorizon(slotTime, now)) {
+      throw new AppError(`You can book up to ${BOOKING_HORIZON_DAYS} days ahead`, 400);
+    }
 
-    // d) Email verification
-    const user = await prisma.user.findUnique({ where: { id: userId } });
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: {
+        id: true,
+        timezone: true,
+        planTier: true,
+        emailVerified: true,
+        suspendedUntil: true,
+      },
+    });
     if (!user) {
       throw new AppError('User not found', 404);
     }
     if (!user.emailVerified) {
+      throw new AppError('Please verify your email before booking sessions', 403);
+    }
+    if (user.suspendedUntil && user.suspendedUntil > now) {
       throw new AppError(
-        'Please verify your email before booking sessions',
-        403
+        `Your account is suspended until ${user.suspendedUntil.toISOString()} because of missed sessions`,
+        403,
+      );
+    }
+    if (await isOverQuota(user, slotTime)) {
+      throw new AppError(
+        `Free plan limit reached (${FREE_WEEKLY_LIMIT}/${FREE_WEEKLY_LIMIT} sessions this week). Upgrade to book more.`,
+        403,
       );
     }
 
-    // e) Free tier limit: 3 sessions per ISO week
-    if (user.planTier === 'FREE') {
-      const weekBounds = getISOWeekBounds();
+    const requestEnd = new Date(slotTime.getTime() + durationMin * MINUTE);
 
-      const [completedSessionCount, matchedBookingCount] = await Promise.all([
-        prisma.session.count({
-          where: {
-            OR: [{ user1Id: userId }, { user2Id: userId }],
-            status: 'COMPLETED',
-            scheduledAt: {
-              gte: weekBounds.start,
-              lt: weekBounds.end,
+    // Check and create together so two quick clicks cannot book the same time twice.
+    const bookingRequest = await withSerializableRetry(() =>
+      prisma.$transaction(
+        async (tx) => {
+          const active = await tx.bookingRequest.findMany({
+            where: { userId, status: { in: ['PENDING', 'MATCHED'] }, slotTime: { gt: new Date(now.getTime() - 75 * MINUTE) } },
+            select: { slotTime: true, durationMin: true },
+          });
+
+          for (const existing of active) {
+            const existingEnd = new Date(existing.slotTime.getTime() + existing.durationMin * MINUTE);
+            const overlaps = existing.slotTime < requestEnd && existingEnd > slotTime;
+            if (!overlaps) continue;
+            if (existing.slotTime.getTime() === slotTime.getTime() && existing.durationMin === durationMin) {
+              throw new AppError('You already have a booking for this time slot', 409);
+            }
+            throw new AppError('You already have a booking that overlaps this time', 409);
+          }
+
+          const upcoming = active.filter((b) => b.slotTime > now).length;
+          if (upcoming >= MAX_FUTURE_BOOKINGS) {
+            throw new AppError(`You can have at most ${MAX_FUTURE_BOOKINGS} upcoming bookings at a time`, 409);
+          }
+
+          return tx.bookingRequest.create({
+            data: {
+              userId,
+              slotTime,
+              durationMin,
+              status: 'PENDING',
+              cameraOn: params.cameraOn,
+              quiet: params.quiet,
+              taskType: params.taskType,
+              flexible: params.flexible,
             },
-          },
-        }),
-        prisma.bookingRequest.count({
-          where: {
-            userId,
-            status: 'MATCHED',
-            slotTime: {
-              gte: weekBounds.start,
-              lt: weekBounds.end,
-            },
-          },
-        }),
-      ]);
-
-      if (completedSessionCount + matchedBookingCount >= 3) {
-        throw new AppError(
-          'Free tier limit reached (3/3 sessions this week). Upgrade to Pro for unlimited sessions.',
-          403
-        );
-      }
-    }
-
-    // f) Duplicate check
-    const duplicate = await prisma.bookingRequest.findFirst({
-      where: {
-        userId,
-        slotTime,
-        durationMin,
-        status: { in: ['PENDING', 'MATCHED'] },
-      },
-    });
-    if (duplicate) {
-      throw new AppError('You already have a booking for this time slot', 409);
-    }
-
-    // g) Session overlap check
-    const requestEnd = new Date(slotTime.getTime() + durationMin * 60 * 1000);
-    const potentialOverlaps = await prisma.session.findMany({
-      where: {
-        OR: [{ user1Id: userId }, { user2Id: userId }],
-        status: { in: ['CONFIRMED', 'ACTIVE'] },
-        scheduledAt: { lt: requestEnd },
-      },
-    });
-
-    const overlapping = potentialOverlaps.filter((s) => {
-      const sessionEnd = new Date(
-        s.scheduledAt.getTime() + s.durationMin * 60 * 1000
-      );
-      return sessionEnd > slotTime;
-    });
-
-    if (overlapping.length > 0) {
-      throw new AppError('You have an overlapping session at this time', 409);
-    }
-
-    // All validations passed — create BookingRequest
-    const bookingRequest = await prisma.bookingRequest.create({
-      data: {
-        userId,
-        slotTime,
-        durationMin,
-        status: 'PENDING',
-      },
-    });
-
-    // Attempt immediate matching
-    const session = await MatchingService.matchBookingRequest(
-      bookingRequest.id
+          });
+        },
+        { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+      ),
     );
 
+    // Try to match straight away
+    const session = await MatchingService.matchBookingRequest(bookingRequest.id);
+
     if (session) {
-      // Match found — schedule noshow check and reminders
       await scheduleNoshowCheck(session.id, session.scheduledAt);
       await scheduleReminders(session.id, session.scheduledAt);
-
-      // Send real-time notifications to BOTH users
       await NotificationService.notifyMatch(session);
 
-      // Re-fetch the updated booking request (now MATCHED with sessionId)
       const updatedBooking = await prisma.bookingRequest.findUnique({
         where: { id: bookingRequest.id },
       });
-
       return { bookingRequest: updatedBooking ?? bookingRequest, session };
     }
 
-    // No match — schedule booking expiry at slot time
+    // Nobody to match with yet: wait, and expire at the start time if still alone
     await scheduleBookingExpiry(bookingRequest.id, slotTime);
 
     return { bookingRequest, session: null };
@@ -171,12 +164,7 @@ export class BookingsService {
    * List user's booking requests with optional status filter and pagination.
    * For MATCHED bookings, includes session with partner info.
    */
-  static async listBookings(
-    userId: string,
-    status?: string,
-    page: number = 1,
-    limit: number = 10
-  ) {
+  static async listBookings(userId: string, status?: string, page: number = 1, limit: number = 10) {
     const skip = (page - 1) * limit;
 
     const where: Record<string, unknown> = { userId };
@@ -195,20 +183,10 @@ export class BookingsService {
           session: {
             include: {
               user1: {
-                select: {
-                  id: true,
-                  displayName: true,
-                  username: true,
-                  avatarUrl: true,
-                },
+                select: { id: true, displayName: true, username: true, avatarUrl: true },
               },
               user2: {
-                select: {
-                  id: true,
-                  displayName: true,
-                  username: true,
-                  avatarUrl: true,
-                },
+                select: { id: true, displayName: true, username: true, avatarUrl: true },
               },
             },
           },
@@ -226,219 +204,171 @@ export class BookingsService {
       return { ...br, partner: null };
     });
 
-    return {
-      data,
-      total,
-      page,
-      totalPages: Math.ceil(total / limit),
-    };
+    return { data, total, page, totalPages: Math.ceil(total / limit) };
   }
 
   /**
-   * Cancel a booking request.
+   * Cancel a booking (spec §5.5).
    *
-   * - PENDING: simple status change + remove expiry job
-   * - MATCHED: transaction to cancel session, revert partner booking to PENDING,
-   *   then re-trigger matching for the partner
-   * - Late cancellation (< 1 hour before slot, MATCHED): increment strikeCount
+   * - Waiting (PENDING): cancelled, nothing else changes.
+   * - Matched, at least 1 hour before the start: free. The session is given back
+   *   (no quota used) and the partner goes back to waiting and is rematched.
+   * - Matched, less than 1 hour before: allowed, but it is a LATE_CANCELLED booking,
+   *   the session still counts, and the canceller gets one strike. The partner is
+   *   treated the same as above.
    */
   static async cancelBooking(bookingId: string, userId: string) {
-    const booking = await prisma.bookingRequest.findUnique({
-      where: { id: bookingId },
-    });
+    const booking = await prisma.bookingRequest.findUnique({ where: { id: bookingId } });
 
     if (!booking) {
       throw new AppError('Booking not found', 404);
     }
-
     if (booking.userId !== userId) {
       throw new AppError('Not authorized', 403);
     }
-
-    if (booking.status === 'EXPIRED' || booking.status === 'CANCELLED') {
-      throw new AppError('Booking is already cancelled or expired', 400);
+    if (booking.status !== 'PENDING' && booking.status !== 'MATCHED') {
+      throw new AppError(
+        booking.status === 'EXPIRED' || booking.status === 'CANCELLED'
+          ? 'Booking is already cancelled or expired'
+          : 'Cannot cancel booking in current state',
+        400,
+      );
     }
 
-    // ── PENDING cancellation ──────────────────────────────────────
+    // ── Waiting booking ───────────────────────────────────────────
     if (booking.status === 'PENDING') {
       await prisma.bookingRequest.update({
         where: { id: bookingId },
-        data: { status: 'CANCELLED' },
+        data: { status: 'CANCELLED', countsToQuota: false },
       });
-
       await removeJob('booking-expiry', `expiry-${bookingId}`);
-
       return { success: true, message: 'Booking cancelled' };
     }
 
-    // ── MATCHED cancellation ──────────────────────────────────────
-    if (booking.status === 'MATCHED') {
-      const partnerBooking = await prisma.$transaction(async (tx) => {
-        // a) Set this booking status = CANCELLED
-        await tx.bookingRequest.update({
-          where: { id: bookingId },
+    // ── Matched booking ───────────────────────────────────────────
+    const free = isFreeCancellation(booking.slotTime, new Date());
+
+    const partnerBooking = await prisma.$transaction(async (tx) => {
+      await tx.bookingRequest.update({
+        where: { id: bookingId },
+        data: free
+          ? { status: 'CANCELLED', countsToQuota: false }
+          : { status: 'LATE_CANCELLED' },
+      });
+
+      if (booking.sessionId) {
+        await tx.session.update({
+          where: { id: booking.sessionId },
           data: { status: 'CANCELLED' },
         });
+      }
 
-        // b) Set linked session status = CANCELLED
-        if (booking.sessionId) {
-          await tx.session.update({
-            where: { id: booking.sessionId },
-            data: { status: 'CANCELLED' },
-          });
-        }
-
-        // c) Find partner's BookingRequest for this session
-        const partner = await tx.bookingRequest.findFirst({
-          where: {
-            sessionId: booking.sessionId,
-            userId: { not: userId },
-          },
-        });
-
-        // d) Set partner's booking: status = PENDING, sessionId = null
-        if (partner) {
-          await tx.bookingRequest.update({
-            where: { id: partner.id },
-            data: { status: 'PENDING', sessionId: null },
-          });
-        }
-
-        return partner;
+      const partner = await tx.bookingRequest.findFirst({
+        where: { sessionId: booking.sessionId, userId: { not: userId } },
       });
 
-      // e) Remove scheduled jobs for the cancelled session
-      if (booking.sessionId) {
-        await removeJob('session-noshow', `noshow-${booking.sessionId}`);
-        await removeJob(
-          'session-reminder',
-          `reminder-24h-${booking.sessionId}`
-        );
-        await removeJob(
-          'session-reminder',
-          `reminder-5m-${booking.sessionId}`
-        );
-      }
-
-      // f) Re-trigger matching for partner
-      if (partnerBooking) {
-        const rematchSession = await MatchingService.matchBookingRequest(partnerBooking.id);
-        if (rematchSession) {
-          await scheduleNoshowCheck(rematchSession.id, rematchSession.scheduledAt);
-          await scheduleReminders(rematchSession.id, rematchSession.scheduledAt);
-          await NotificationService.notifyMatch(rematchSession);
-        }
-      }
-
-      // 6. Late cancellation penalty
-      //    If slotTime is within 1 hour from now AND booking was MATCHED
-      const oneHourFromNow = new Date(Date.now() + 60 * 60 * 1000);
-      if (booking.slotTime <= oneHourFromNow) {
-        const updatedUser = await prisma.user.update({
-          where: { id: userId },
-          data: { strikeCount: { increment: 1 } },
+      // The partner goes back to waiting
+      if (partner) {
+        await tx.bookingRequest.update({
+          where: { id: partner.id },
+          data: { status: 'PENDING', sessionId: null },
         });
-
-        if (updatedUser.strikeCount >= 3 && updatedUser.strikeCount < 5) {
-          console.warn(
-            `User ${userId} has ${updatedUser.strikeCount} strikes — warning threshold reached`
-          );
-        }
-
-        if (updatedUser.strikeCount >= 5) {
-          await prisma.user.update({
-            where: { id: userId },
-            data: { isBanned: true },
-          });
-          console.warn(`User ${userId} has been banned — 5 strikes reached`);
-        }
       }
 
-      return { success: true, message: 'Booking cancelled' };
+      return partner;
+    });
+
+    // Jobs that belonged to the cancelled session
+    if (booking.sessionId) {
+      await removeJob('session-noshow', `noshow-${booking.sessionId}`);
+      await removeJob('session-reminder', `reminder-24h-${booking.sessionId}`);
+      await removeJob('session-reminder', `reminder-5m-${booking.sessionId}`);
     }
 
-    throw new AppError('Cannot cancel booking in current state', 400);
+    // Look for a new partner for the person who is left
+    if (partnerBooking) {
+      const rematchSession = await MatchingService.matchBookingRequest(partnerBooking.id);
+      if (rematchSession) {
+        await scheduleNoshowCheck(rematchSession.id, rematchSession.scheduledAt);
+        await scheduleReminders(rematchSession.id, rematchSession.scheduledAt);
+        await NotificationService.notifyMatch(rematchSession);
+      } else {
+        await scheduleBookingExpiry(partnerBooking.id, partnerBooking.slotTime);
+      }
+    }
+
+    if (!free) {
+      await addStrike({ userId, reason: 'LATE_CANCEL', bookingRequestId: booking.id });
+    }
+
+    return { success: true, message: 'Booking cancelled' };
   }
 
   /**
-   * Get available pending bookings from other active users for the calendar timeline.
+   * Waiting bookings from other people, for the calendar (spec §2.2).
+   * Shows who is waiting and with which options, so people can pick a good slot.
+   * People who chose to hide their photo are shown as initials: the server drops
+   * the photo, so it never reaches the browser.
    */
-  static async getAvailableBookings(
-    currentUserId: string,
-    dateStr: string,
-    days: number
-  ) {
+  static async getAvailableBookings(currentUserId: string, dateStr: string, days: number) {
     const startDate = new Date(dateStr);
     startDate.setUTCHours(0, 0, 0, 0);
 
     const endDate = new Date(startDate);
     endDate.setUTCDate(startDate.getUTCDate() + days);
 
-    // Get list of users the current user has blocked or who blocked them
+    // People the current user has blocked or who blocked them (stored in both directions)
     const blocks = await prisma.block.findMany({
-      where: {
-        OR: [{ blockerId: currentUserId }, { blockedId: currentUserId }],
-      },
+      where: { OR: [{ blockerId: currentUserId }, { blockedId: currentUserId }] },
       select: { blockerId: true, blockedId: true },
     });
 
-    const excludedUserIds = new Set<string>();
+    const excludedUserIds = new Set<string>([currentUserId]);
     for (const b of blocks) {
-      if (b.blockerId === currentUserId) excludedUserIds.add(b.blockedId);
-      if (b.blockedId === currentUserId) excludedUserIds.add(b.blockerId);
+      excludedUserIds.add(b.blockerId === currentUserId ? b.blockedId : b.blockerId);
     }
-    excludedUserIds.add(currentUserId);
 
-    const bookings = await prisma.bookingRequest.findMany({
-      where: {
-        status: 'PENDING',
-        slotTime: {
-          gte: startDate,
-          lt: endDate,
-        },
-        userId: {
-          notIn: Array.from(excludedUserIds),
-        },
-        user: {
-          isBanned: false,
-          isActive: true,
-        },
-      },
-      select: {
-        id: true,
-        slotTime: true,
-        durationMin: true,
-        user: {
-          select: {
-            id: true,
-            displayName: true,
-            username: true,
-            avatarUrl: true,
+    const now = new Date();
+    const [bookings, favoriteIds] = await Promise.all([
+      prisma.bookingRequest.findMany({
+        where: {
+          status: 'PENDING',
+          slotTime: { gte: startDate, lt: endDate },
+          userId: { notIn: Array.from(excludedUserIds) },
+          user: {
+            isBanned: false,
+            isActive: true,
+            OR: [{ suspendedUntil: null }, { suspendedUntil: { lt: now } }],
           },
         },
-      },
-      orderBy: { slotTime: 'asc' },
-    });
+        select: {
+          id: true,
+          slotTime: true,
+          durationMin: true,
+          cameraOn: true,
+          quiet: true,
+          taskType: true,
+          user: {
+            select: { id: true, displayName: true, username: true, avatarUrl: true, hidePhoto: true },
+          },
+        },
+        orderBy: { slotTime: 'asc' },
+      }),
+      FavoritesService.favoriteIds(currentUserId),
+    ]);
 
-    return { bookings };
+    return {
+      bookings: bookings.map(({ user, ...booking }) => ({
+        ...booking,
+        isFavorite: favoriteIds.has(user.id),
+        user: {
+          id: user.id,
+          displayName: user.displayName,
+          username: user.username,
+          avatarUrl: user.hidePhoto ? null : user.avatarUrl,
+          initials: initialsOf(user.displayName),
+        },
+      })),
+    };
   }
-}
-
-/**
- * Calculate the start (Monday 00:00 UTC) and end (next Monday 00:00 UTC)
- * of the current ISO week.
- */
-function getISOWeekBounds(): { start: Date; end: Date } {
-  const now = new Date();
-  const day = now.getUTCDay(); // 0 = Sunday, 1 = Monday, …, 6 = Saturday
-  const diff = day === 0 ? 6 : day - 1; // days since last Monday
-
-  const start = new Date(now);
-  start.setUTCDate(now.getUTCDate() - diff);
-  start.setUTCHours(0, 0, 0, 0);
-
-  const end = new Date(start);
-  end.setUTCDate(start.getUTCDate() + 7);
-
-  return { start, end };
 }

@@ -52,6 +52,19 @@ reminders, dashboard, admin panel and analytics events.
 | T14 | Auth: email | Verification and reset emails go through Resend. No Resend account yet: in development they are printed in the API log. **A sending domain and Resend key are required before beta invites** (the verified-email gate would lock beta users out otherwise) | — |
 | T15 | Auth: tests | `bun run test:integration` runs the real flows (sign-up, verify, sign-in/out, reset, ban, rate limit) against a real `focusup_test` database. Not in the pre-commit hook | — |
 
+### Core: booking and matching (M)
+
+| # | Area | Decision | Overrides |
+|---|---|---|---|
+| M1 | Core: scope | Booking + matching v2 ships in two PRs: backend (schema, rules, strikes, favorites, real-database tests) first, then the UI (booking options, badges, hide-photo, strike screens) | — |
+| M2 | Desk/Walk | Included now as a soft preference (it orders candidates, never blocks a match) | Spec #14 confirmed |
+| M3 | Same-gender | **Deferred until after the beta.** No gender field, no hard filter, no T-10 relax step for now | Spec #17, #18, §5.2, §5.3 |
+| M4 | Free quota | 6 sessions per Monday-Sunday week in the user's timezone is built (`QUOTA_ENFORCED`), but **switched off during the beta** and turned on with payments at launch | Spec §5.1 timing |
+| M5 | Matching rules | Hard: same start and duration, not blocked either way, partner active, not banned, not suspended. Soft ordering: favorite, same camera, same Quiet, same Desk/Walk, longest wait. Match locks at booking. Concurrent bookings are serializable and retried a fixed 3 times | Spec §5.2 (camera and Quiet as hard filters) |
+| M6 | Strikes | `Strike` records (no counter). A strike comes from a no-show, a late cancel (under 1 hour) or an admin. 5 inside a rolling 30 days suspend the account for 3 days (signing in still works). A booking earns at most one strike per reason. Permanent bans stay an admin action only | Old rule: permanent ban at 5 |
+| M7 | Booking limits | At most 14 days ahead and 3 upcoming bookings; no overlap with your own bookings. Cancelling a matched booking at least 1 hour ahead is free (session given back); later is a strike and still counts | — |
+| M8 | Bug fixed | A cancelled booking used to block rebooking the same slot (unique key on user, slot and duration). Replaced by an index plus a transactional overlap check | — |
+
 ### Process
 
 | # | Area | Decision |

@@ -30,6 +30,11 @@ export interface BanNotificationParams {
   to: string;
 }
 
+export interface SuspensionNotificationParams {
+  to: string;
+  until: Date;
+}
+
 export interface PartnerNoShowParams {
   to: string;
   sessionId: string;
@@ -136,6 +141,16 @@ export class EmailService {
     params: BanNotificationParams,
   ): Promise<void> {
     console.log("[EmailService] sendBanNotification:", params);
+  }
+
+  /**
+   * Send suspension notification email (5 strikes in 30 days).
+   * TODO: Implement Resend SDK in Phase 3.
+   */
+  static async sendSuspensionNotification(
+    params: SuspensionNotificationParams,
+  ): Promise<void> {
+    console.log("[EmailService] sendSuspensionNotification:", params);
   }
 
   /**

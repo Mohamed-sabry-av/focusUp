@@ -125,7 +125,6 @@ const FULL_USER = {
   categories: [],
   preferredLength: [25, 50],
   stripeCustomerId: null,
-  strikeCount: 0,
   isAdmin: false,
   createdAt: new Date(),
   updatedAt: new Date(),
@@ -139,7 +138,6 @@ const FULL_USER_2 = {
   categories: [],
   preferredLength: [25, 50],
   stripeCustomerId: null,
-  strikeCount: 0,
   isAdmin: false,
   createdAt: new Date(),
   updatedAt: new Date(),
@@ -172,292 +170,11 @@ describe('Bookings & Matching', () => {
   // MATCHING SERVICE — Unit Tests
   // ================================================================
 
-  describe('MatchingService', () => {
-    it('should match two users booking same slot and duration', async () => {
-      const slot = futureSlot();
-
-      // tx.bookingRequest.findUnique — the requesting booking
-      (prisma.bookingRequest.findUnique as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
-        id: 'booking-1',
-        userId: 'user-1',
-        slotTime: slot,
-        durationMin: 50,
-        status: 'PENDING',
-      });
-
-      // tx.block.findMany — no blocks
-      (prisma.block.findMany as ReturnType<typeof vi.fn>).mockResolvedValueOnce([]);
-
-      // tx.bookingRequest.findFirst — another user's PENDING booking
-      (prisma.bookingRequest.findFirst as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
-        id: 'booking-2',
-        userId: 'user-2',
-        slotTime: slot,
-        durationMin: 50,
-        status: 'PENDING',
-        user: FULL_USER_2,
-      });
-
-      // tx.session.create
-      (prisma.session.create as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
-        id: 'session-1',
-        user1Id: 'user-2',
-        user2Id: 'user-1',
-        durationMin: 50,
-        status: 'CONFIRMED',
-        scheduledAt: slot,
-        livekitRoomName: 'pending-temp',
-        user1: FULL_USER_2,
-        user2: FULL_USER,
-      });
-
-      // tx.session.update — set livekitRoomName = session.id
-      (prisma.session.update as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
-        id: 'session-1',
-        user1Id: 'user-2',
-        user2Id: 'user-1',
-        durationMin: 50,
-        status: 'CONFIRMED',
-        scheduledAt: slot,
-        livekitRoomName: 'session-1',
-        user1: FULL_USER_2,
-        user2: FULL_USER,
-      });
-
-      // tx.bookingRequest.update x2 (match + requesting)
-      (prisma.bookingRequest.update as ReturnType<typeof vi.fn>)
-        .mockResolvedValueOnce({})
-        .mockResolvedValueOnce({});
-
-      const result = await MatchingService.matchBookingRequest('booking-1');
-
-      expect(result).not.toBeNull();
-      expect(result?.id).toBe('session-1');
-      expect(result?.livekitRoomName).toBe('session-1');
-      expect(result?.status).toBe('CONFIRMED');
-      expect(result?.user1Id).toBe('user-2'); // earlier booking = user1
-      expect(result?.user2Id).toBe('user-1'); // current booking = user2
-    });
-
-    it('should return null when no match is available (third user stays PENDING)', async () => {
-      const slot = futureSlot();
-
-      (prisma.bookingRequest.findUnique as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
-        id: 'booking-3',
-        userId: 'user-3',
-        slotTime: slot,
-        durationMin: 50,
-        status: 'PENDING',
-      });
-
-      (prisma.block.findMany as ReturnType<typeof vi.fn>).mockResolvedValueOnce([]);
-
-      // No other PENDING bookings available
-      (prisma.bookingRequest.findFirst as ReturnType<typeof vi.fn>).mockResolvedValueOnce(null);
-
-      const result = await MatchingService.matchBookingRequest('booking-3');
-
-      expect(result).toBeNull();
-    });
-
-    it('should not match blocked users', async () => {
-      const slot = futureSlot();
-
-      (prisma.bookingRequest.findUnique as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
-        id: 'booking-1',
-        userId: 'user-1',
-        slotTime: slot,
-        durationMin: 50,
-        status: 'PENDING',
-      });
-
-      // user-1 has blocked user-2
-      (prisma.block.findMany as ReturnType<typeof vi.fn>).mockResolvedValueOnce([
-        { blockerId: 'user-1', blockedId: 'user-2' },
-      ]);
-
-      // findFirst excludes blocked users — returns null (no other users)
-      (prisma.bookingRequest.findFirst as ReturnType<typeof vi.fn>).mockResolvedValueOnce(null);
-
-      const result = await MatchingService.matchBookingRequest('booking-1');
-
-      expect(result).toBeNull();
-
-      // Verify that notIn includes the blocked user
-      expect(prisma.bookingRequest.findFirst).toHaveBeenCalledWith(
-        expect.objectContaining({
-          where: expect.objectContaining({
-            userId: expect.objectContaining({
-              notIn: expect.arrayContaining(['user-2']),
-            }),
-          }),
-        })
-      );
-    });
-
-    it('should exclude banned users from matching', async () => {
-      const slot = futureSlot();
-
-      (prisma.bookingRequest.findUnique as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
-        id: 'booking-1',
-        userId: 'user-1',
-        slotTime: slot,
-        durationMin: 50,
-        status: 'PENDING',
-      });
-
-      (prisma.block.findMany as ReturnType<typeof vi.fn>).mockResolvedValueOnce([]);
-
-      // No match because only matching user is banned
-      (prisma.bookingRequest.findFirst as ReturnType<typeof vi.fn>).mockResolvedValueOnce(null);
-
-      const result = await MatchingService.matchBookingRequest('booking-1');
-
-      expect(result).toBeNull();
-
-      // Verify the user filter includes isBanned: false
-      expect(prisma.bookingRequest.findFirst).toHaveBeenCalledWith(
-        expect.objectContaining({
-          where: expect.objectContaining({
-            user: expect.objectContaining({
-              isBanned: false,
-              isActive: true,
-            }),
-          }),
-        })
-      );
-    });
-
-    it('should handle concurrent matching — exactly 1 pair from 3 bookings', async () => {
-      const slot = futureSlot();
-
-      // First call: booking-A finds booking-B as match
-      const setupFirstCall = () => {
-        (prisma.bookingRequest.findUnique as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
-          id: 'booking-A',
-          userId: 'user-A',
-          slotTime: slot,
-          durationMin: 25,
-          status: 'PENDING',
-        });
-        (prisma.block.findMany as ReturnType<typeof vi.fn>).mockResolvedValueOnce([]);
-        (prisma.bookingRequest.findFirst as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
-          id: 'booking-B',
-          userId: 'user-B',
-          slotTime: slot,
-          durationMin: 25,
-          status: 'PENDING',
-          user: { id: 'user-B', displayName: 'User B' },
-        });
-        (prisma.session.create as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
-          id: 'session-AB',
-          user1Id: 'user-B',
-          user2Id: 'user-A',
-          durationMin: 25,
-          status: 'CONFIRMED',
-          scheduledAt: slot,
-          livekitRoomName: 'pending',
-          user1: { id: 'user-B' },
-          user2: { id: 'user-A' },
-        });
-        (prisma.session.update as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
-          id: 'session-AB',
-          user1Id: 'user-B',
-          user2Id: 'user-A',
-          durationMin: 25,
-          status: 'CONFIRMED',
-          scheduledAt: slot,
-          livekitRoomName: 'session-AB',
-          user1: { id: 'user-B' },
-          user2: { id: 'user-A' },
-        });
-        (prisma.bookingRequest.update as ReturnType<typeof vi.fn>)
-          .mockResolvedValueOnce({})
-          .mockResolvedValueOnce({});
-      };
-
-      // Second call: booking-C finds no match (B is already MATCHED)
-      const setupSecondCall = () => {
-        (prisma.bookingRequest.findUnique as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
-          id: 'booking-C',
-          userId: 'user-C',
-          slotTime: slot,
-          durationMin: 25,
-          status: 'PENDING',
-        });
-        (prisma.block.findMany as ReturnType<typeof vi.fn>).mockResolvedValueOnce([]);
-        (prisma.bookingRequest.findFirst as ReturnType<typeof vi.fn>).mockResolvedValueOnce(null);
-      };
-
-      setupFirstCall();
-      setupSecondCall();
-
-      // Run both in parallel
-      const [resultA, resultC] = await Promise.all([
-        MatchingService.matchBookingRequest('booking-A'),
-        MatchingService.matchBookingRequest('booking-C'),
-      ]);
-
-      // Exactly one pair matched, one stays PENDING
-      expect(resultA).not.toBeNull();
-      expect(resultA?.id).toBe('session-AB');
-      expect(resultC).toBeNull();
-    });
-  });
-
   // ================================================================
   // POST /api/v1/bookings — Create Booking
   // ================================================================
 
   describe('POST /api/v1/bookings', () => {
-    it('should create a booking request successfully', async () => {
-      const slot = futureSlot();
-
-      // Auth middleware user lookup
-      (prisma.user.findUnique as ReturnType<typeof vi.fn>).mockResolvedValueOnce(AUTH_USER);
-
-      // Service: user lookup for email verification
-      (prisma.user.findUnique as ReturnType<typeof vi.fn>).mockResolvedValueOnce(FULL_USER);
-
-      // Free tier: session count + booking count
-      (prisma.session.count as ReturnType<typeof vi.fn>).mockResolvedValueOnce(0);
-      (prisma.bookingRequest.count as ReturnType<typeof vi.fn>).mockResolvedValueOnce(0);
-
-      // Duplicate check
-      (prisma.bookingRequest.findFirst as ReturnType<typeof vi.fn>).mockResolvedValueOnce(null);
-
-      // Overlap check
-      (prisma.session.findMany as ReturnType<typeof vi.fn>).mockResolvedValueOnce([]);
-
-      // Create booking
-      const createdBooking = {
-        id: 'booking-new',
-        userId: 'user-1',
-        slotTime: slot,
-        durationMin: 50,
-        status: 'PENDING',
-        sessionId: null,
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      };
-      (prisma.bookingRequest.create as ReturnType<typeof vi.fn>).mockResolvedValueOnce(createdBooking);
-
-      // Matching: booking findUnique inside transaction
-      (prisma.bookingRequest.findUnique as ReturnType<typeof vi.fn>).mockResolvedValueOnce(createdBooking);
-      (prisma.block.findMany as ReturnType<typeof vi.fn>).mockResolvedValueOnce([]);
-      // No match available
-      (prisma.bookingRequest.findFirst as ReturnType<typeof vi.fn>).mockResolvedValueOnce(null);
-
-      const res = await request(app)
-        .post('/api/v1/bookings')
-        .set('Cookie', [authCookie('user-1')])
-        .send({ slotTime: slot.toISOString(), durationMin: 50 });
-
-      expect(res.status).toBe(201);
-      expect(res.body.data.bookingRequest.id).toBe('booking-new');
-      expect(res.body.data.session).toBeNull();
-    });
-
     it('should return 403 when the email is not verified', async () => {
       (prisma.user.findUnique as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
         ...AUTH_USER,
@@ -472,117 +189,6 @@ describe('Bookings & Matching', () => {
       expect(res.status).toBe(403);
       expect(res.body.error).toBe('Please verify your email first');
       expect(prisma.bookingRequest.create).not.toHaveBeenCalled();
-    });
-
-    it('should return session when immediate match is found', async () => {
-      const slot = futureSlot();
-
-      // Auth middleware
-      (prisma.user.findUnique as ReturnType<typeof vi.fn>).mockResolvedValueOnce(AUTH_USER);
-
-      // Service: user lookup
-      (prisma.user.findUnique as ReturnType<typeof vi.fn>).mockResolvedValueOnce(FULL_USER);
-
-      // Free tier counts
-      (prisma.session.count as ReturnType<typeof vi.fn>).mockResolvedValueOnce(0);
-      (prisma.bookingRequest.count as ReturnType<typeof vi.fn>).mockResolvedValueOnce(0);
-
-      // No duplicate
-      (prisma.bookingRequest.findFirst as ReturnType<typeof vi.fn>).mockResolvedValueOnce(null);
-
-      // No overlap
-      (prisma.session.findMany as ReturnType<typeof vi.fn>).mockResolvedValueOnce([]);
-
-      // Create booking
-      const createdBooking = {
-        id: 'booking-1',
-        userId: 'user-1',
-        slotTime: slot,
-        durationMin: 50,
-        status: 'PENDING',
-        sessionId: null,
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      };
-      (prisma.bookingRequest.create as ReturnType<typeof vi.fn>).mockResolvedValueOnce(createdBooking);
-
-      // Matching transaction:
-      // tx.bookingRequest.findUnique
-      (prisma.bookingRequest.findUnique as ReturnType<typeof vi.fn>).mockResolvedValueOnce(createdBooking);
-      // tx.block.findMany
-      (prisma.block.findMany as ReturnType<typeof vi.fn>).mockResolvedValueOnce([]);
-      // tx.bookingRequest.findFirst — found match!
-      (prisma.bookingRequest.findFirst as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
-        id: 'booking-2',
-        userId: 'user-2',
-        slotTime: slot,
-        durationMin: 50,
-        status: 'PENDING',
-        user: FULL_USER_2,
-      });
-
-      const matchedSession = {
-        id: 'session-matched',
-        user1Id: 'user-2',
-        user2Id: 'user-1',
-        durationMin: 50,
-        status: 'CONFIRMED',
-        scheduledAt: slot,
-        livekitRoomName: 'session-matched',
-        user1: FULL_USER_2,
-        user2: FULL_USER,
-      };
-
-      // tx.session.create
-      (prisma.session.create as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
-        ...matchedSession,
-        livekitRoomName: 'pending-temp',
-      });
-      // tx.session.update
-      (prisma.session.update as ReturnType<typeof vi.fn>).mockResolvedValueOnce(matchedSession);
-      // tx.bookingRequest.update x2
-      (prisma.bookingRequest.update as ReturnType<typeof vi.fn>)
-        .mockResolvedValueOnce({})
-        .mockResolvedValueOnce({});
-
-      // After match: re-fetch updated booking
-      (prisma.bookingRequest.findUnique as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
-        ...createdBooking,
-        status: 'MATCHED',
-        sessionId: 'session-matched',
-      });
-
-      const res = await request(app)
-        .post('/api/v1/bookings')
-        .set('Cookie', [authCookie('user-1')])
-        .send({ slotTime: slot.toISOString(), durationMin: 50 });
-
-      expect(res.status).toBe(201);
-      expect(res.body.data.session).not.toBeNull();
-      expect(res.body.data.session.id).toBe('session-matched');
-      expect(res.body.data.session.status).toBe('CONFIRMED');
-      expect(res.body.data.bookingRequest.status).toBe('MATCHED');
-    });
-
-    it('should return 403 for free tier limit exceeded', async () => {
-      const slot = futureSlot();
-
-      // Auth
-      (prisma.user.findUnique as ReturnType<typeof vi.fn>).mockResolvedValueOnce(AUTH_USER);
-      // Service user lookup
-      (prisma.user.findUnique as ReturnType<typeof vi.fn>).mockResolvedValueOnce(FULL_USER);
-
-      // Free tier: 2 completed + 1 matched = 3 (at limit)
-      (prisma.session.count as ReturnType<typeof vi.fn>).mockResolvedValueOnce(2);
-      (prisma.bookingRequest.count as ReturnType<typeof vi.fn>).mockResolvedValueOnce(1);
-
-      const res = await request(app)
-        .post('/api/v1/bookings')
-        .set('Cookie', [authCookie('user-1')])
-        .send({ slotTime: slot.toISOString(), durationMin: 50 });
-
-      expect(res.status).toBe(403);
-      expect(res.body.error).toContain('Free tier limit reached');
     });
 
     it('should return 400 for invalid slotTime (not 15-minute boundary)', async () => {
@@ -622,70 +228,39 @@ describe('Bookings & Matching', () => {
       expect(res.body.error).toContain('at least 5 minutes in the future');
     });
 
-    it('should return 409 for duplicate booking', async () => {
-      const slot = futureSlot();
+    it('should return 400 for a booking more than 14 days ahead', async () => {
+      const far = new Date(Date.now() + 15 * 24 * 60 * 60 * 1000);
+      far.setUTCMinutes(0, 0, 0);
 
-      // Auth
       (prisma.user.findUnique as ReturnType<typeof vi.fn>).mockResolvedValueOnce(AUTH_USER);
-      // Service user lookup
-      (prisma.user.findUnique as ReturnType<typeof vi.fn>).mockResolvedValueOnce(FULL_USER);
 
-      // Free tier counts
-      (prisma.session.count as ReturnType<typeof vi.fn>).mockResolvedValueOnce(0);
-      (prisma.bookingRequest.count as ReturnType<typeof vi.fn>).mockResolvedValueOnce(0);
+      const res = await request(app)
+        .post('/api/v1/bookings')
+        .set('Cookie', [authCookie('user-1')])
+        .send({ slotTime: far.toISOString(), durationMin: 50 });
 
-      // Duplicate found!
-      (prisma.bookingRequest.findFirst as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
-        id: 'existing-booking',
-        userId: 'user-1',
-        slotTime: slot,
-        durationMin: 50,
-        status: 'PENDING',
+      expect(res.status).toBe(400);
+      expect(res.body.error).toContain('14 days');
+      expect(prisma.bookingRequest.create).not.toHaveBeenCalled();
+    });
+
+    it('should return 403 while the account is suspended', async () => {
+      const until = new Date(Date.now() + 2 * 24 * 60 * 60 * 1000);
+
+      (prisma.user.findUnique as ReturnType<typeof vi.fn>).mockResolvedValueOnce(AUTH_USER);
+      (prisma.user.findUnique as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+        ...FULL_USER,
+        suspendedUntil: until,
       });
 
       const res = await request(app)
         .post('/api/v1/bookings')
         .set('Cookie', [authCookie('user-1')])
-        .send({ slotTime: slot.toISOString(), durationMin: 50 });
+        .send({ slotTime: futureSlot().toISOString(), durationMin: 50 });
 
-      expect(res.status).toBe(409);
-      expect(res.body.error).toContain('already have a booking');
-    });
-
-    it('should return 409 for overlapping session', async () => {
-      const slot = futureSlot();
-
-      // Auth
-      (prisma.user.findUnique as ReturnType<typeof vi.fn>).mockResolvedValueOnce(AUTH_USER);
-      // Service user lookup
-      (prisma.user.findUnique as ReturnType<typeof vi.fn>).mockResolvedValueOnce(FULL_USER);
-
-      // Free tier
-      (prisma.session.count as ReturnType<typeof vi.fn>).mockResolvedValueOnce(0);
-      (prisma.bookingRequest.count as ReturnType<typeof vi.fn>).mockResolvedValueOnce(0);
-
-      // No duplicate
-      (prisma.bookingRequest.findFirst as ReturnType<typeof vi.fn>).mockResolvedValueOnce(null);
-
-      // Overlapping session exists (starts 10 minutes before our slot, 50 min duration)
-      const overlapStart = new Date(slot.getTime() - 10 * 60 * 1000);
-      (prisma.session.findMany as ReturnType<typeof vi.fn>).mockResolvedValueOnce([
-        {
-          id: 'overlap-session',
-          user1Id: 'user-1',
-          durationMin: 50,
-          status: 'CONFIRMED',
-          scheduledAt: overlapStart,
-        },
-      ]);
-
-      const res = await request(app)
-        .post('/api/v1/bookings')
-        .set('Cookie', [authCookie('user-1')])
-        .send({ slotTime: slot.toISOString(), durationMin: 50 });
-
-      expect(res.status).toBe(409);
-      expect(res.body.error).toContain('overlapping session');
+      expect(res.status).toBe(403);
+      expect(res.body.error).toContain('suspended until');
+      expect(prisma.bookingRequest.create).not.toHaveBeenCalled();
     });
 
     it('should return 403 for unverified email', async () => {
@@ -711,51 +286,6 @@ describe('Bookings & Matching', () => {
       expect(res.body.error).toContain('verify your email');
     });
 
-    it('should allow PRO tier user to bypass free limit', async () => {
-      const slot = futureSlot();
-
-      const proUser = { ...AUTH_USER, planTier: 'PRO' };
-      const fullProUser = { ...FULL_USER, planTier: 'PRO' };
-
-      // Auth
-      (prisma.user.findUnique as ReturnType<typeof vi.fn>).mockResolvedValueOnce(proUser);
-      // Service user lookup
-      (prisma.user.findUnique as ReturnType<typeof vi.fn>).mockResolvedValueOnce(fullProUser);
-
-      // PRO user skips free tier check — no session.count / bookingRequest.count calls
-
-      // No duplicate
-      (prisma.bookingRequest.findFirst as ReturnType<typeof vi.fn>).mockResolvedValueOnce(null);
-      // No overlap
-      (prisma.session.findMany as ReturnType<typeof vi.fn>).mockResolvedValueOnce([]);
-
-      // Create booking
-      const createdBooking = {
-        id: 'pro-booking',
-        userId: 'user-1',
-        slotTime: slot,
-        durationMin: 50,
-        status: 'PENDING',
-        sessionId: null,
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      };
-      (prisma.bookingRequest.create as ReturnType<typeof vi.fn>).mockResolvedValueOnce(createdBooking);
-
-      // Matching — no match
-      (prisma.bookingRequest.findUnique as ReturnType<typeof vi.fn>).mockResolvedValueOnce(createdBooking);
-      (prisma.block.findMany as ReturnType<typeof vi.fn>).mockResolvedValueOnce([]);
-      (prisma.bookingRequest.findFirst as ReturnType<typeof vi.fn>).mockResolvedValueOnce(null);
-
-      const res = await request(app)
-        .post('/api/v1/bookings')
-        .set('Cookie', [authCookie('user-1')])
-        .send({ slotTime: slot.toISOString(), durationMin: 50 });
-
-      expect(res.status).toBe(201);
-      // PRO user: session.count and bookingRequest.count should NOT have been called
-      expect(prisma.session.count).not.toHaveBeenCalled();
-    });
   });
 
   // ================================================================
@@ -824,217 +354,6 @@ describe('Bookings & Matching', () => {
       expect(res.status).toBe(200);
       expect(res.body.data.success).toBe(true);
       expect(removeJob).toHaveBeenCalledWith('booking-expiry', 'expiry-booking-1');
-    });
-
-    it('should cancel MATCHED booking and revert partner to PENDING', async () => {
-      const slot = new Date(Date.now() + 3 * 60 * 60 * 1000); // 3 hours ahead (> 1 hour, no strike)
-      slot.setMinutes(0, 0, 0);
-
-      // Auth
-      (prisma.user.findUnique as ReturnType<typeof vi.fn>).mockResolvedValueOnce(AUTH_USER);
-
-      // Find booking — MATCHED
-      (prisma.bookingRequest.findUnique as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
-        id: 'booking-1',
-        userId: 'user-1',
-        slotTime: slot,
-        durationMin: 50,
-        status: 'MATCHED',
-        sessionId: 'session-1',
-      });
-
-      // Inside transaction:
-      // Update this booking
-      (prisma.bookingRequest.update as ReturnType<typeof vi.fn>).mockResolvedValueOnce({});
-      // Update session
-      (prisma.session.update as ReturnType<typeof vi.fn>).mockResolvedValueOnce({});
-      // Find partner booking
-      const partnerBooking = {
-        id: 'booking-2',
-        userId: 'user-2',
-        slotTime: slot,
-        durationMin: 50,
-        status: 'MATCHED',
-        sessionId: 'session-1',
-      };
-      (prisma.bookingRequest.findFirst as ReturnType<typeof vi.fn>).mockResolvedValueOnce(partnerBooking);
-      // Update partner booking
-      (prisma.bookingRequest.update as ReturnType<typeof vi.fn>).mockResolvedValueOnce({});
-
-      // Re-trigger matching for partner:
-      // tx.bookingRequest.findUnique
-      (prisma.bookingRequest.findUnique as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
-        ...partnerBooking,
-        status: 'PENDING',
-        sessionId: null,
-      });
-      (prisma.block.findMany as ReturnType<typeof vi.fn>).mockResolvedValueOnce([]);
-      (prisma.bookingRequest.findFirst as ReturnType<typeof vi.fn>).mockResolvedValueOnce(null); // No new match
-
-
-      const res = await request(app)
-        .delete('/api/v1/bookings/booking-1')
-        .set('Cookie', [authCookie('user-1')]);
-
-      expect(res.status).toBe(200);
-      expect(res.body.data.success).toBe(true);
-
-      // Verify jobs removed
-      expect(removeJob).toHaveBeenCalledWith('session-noshow', 'noshow-session-1');
-      expect(removeJob).toHaveBeenCalledWith('session-reminder', 'reminder-24h-session-1');
-      expect(removeJob).toHaveBeenCalledWith('session-reminder', 'reminder-5m-session-1');
-    });
-
-    it('should trigger re-matching for partner after cancel', async () => {
-      const slot = new Date(Date.now() + 3 * 60 * 60 * 1000);
-      slot.setMinutes(0, 0, 0);
-
-      // Auth
-      (prisma.user.findUnique as ReturnType<typeof vi.fn>).mockResolvedValueOnce(AUTH_USER);
-
-      // Find booking — MATCHED
-      (prisma.bookingRequest.findUnique as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
-        id: 'booking-1',
-        userId: 'user-1',
-        slotTime: slot,
-        durationMin: 50,
-        status: 'MATCHED',
-        sessionId: 'session-1',
-      });
-
-      // Transaction mocks
-      (prisma.bookingRequest.update as ReturnType<typeof vi.fn>).mockResolvedValueOnce({});
-      (prisma.session.update as ReturnType<typeof vi.fn>).mockResolvedValueOnce({});
-
-      const partnerBooking = {
-        id: 'booking-2',
-        userId: 'user-2',
-        slotTime: slot,
-        durationMin: 50,
-        status: 'MATCHED',
-        sessionId: 'session-1',
-      };
-      (prisma.bookingRequest.findFirst as ReturnType<typeof vi.fn>).mockResolvedValueOnce(partnerBooking);
-      (prisma.bookingRequest.update as ReturnType<typeof vi.fn>).mockResolvedValueOnce({});
-
-      // Re-matching for partner — finds a new match (user-3)
-      (prisma.bookingRequest.findUnique as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
-        ...partnerBooking,
-        status: 'PENDING',
-        sessionId: null,
-      });
-      (prisma.block.findMany as ReturnType<typeof vi.fn>).mockResolvedValueOnce([]);
-      (prisma.bookingRequest.findFirst as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
-        id: 'booking-3',
-        userId: 'user-3',
-        slotTime: slot,
-        durationMin: 50,
-        status: 'PENDING',
-        user: { id: 'user-3', displayName: 'User 3' },
-      });
-      (prisma.session.create as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
-        id: 'session-new',
-        user1Id: 'user-3',
-        user2Id: 'user-2',
-        durationMin: 50,
-        status: 'CONFIRMED',
-        scheduledAt: slot,
-        livekitRoomName: 'pending',
-        user1: { id: 'user-3' },
-        user2: { id: 'user-2' },
-      });
-      (prisma.session.update as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
-        id: 'session-new',
-        livekitRoomName: 'session-new',
-      });
-      (prisma.bookingRequest.update as ReturnType<typeof vi.fn>)
-        .mockResolvedValueOnce({})
-        .mockResolvedValueOnce({});
-
-      const res = await request(app)
-        .delete('/api/v1/bookings/booking-1')
-        .set('Cookie', [authCookie('user-1')]);
-
-      expect(res.status).toBe(200);
-
-      // Verify session.create was called for re-matching (new session for partner)
-      expect(prisma.session.create).toHaveBeenCalled();
-    });
-
-    it('should increment strikeCount for late cancellation (< 1 hour)', async () => {
-      // Slot is 30 minutes from now (within 1 hour)
-      const slot = new Date(Date.now() + 30 * 60 * 1000);
-      slot.setMinutes(Math.floor(slot.getMinutes() / 15) * 15, 0, 0);
-
-      // Auth
-      (prisma.user.findUnique as ReturnType<typeof vi.fn>).mockResolvedValueOnce(AUTH_USER);
-
-      // Find booking — MATCHED, slot within 1 hour
-      (prisma.bookingRequest.findUnique as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
-        id: 'booking-late',
-        userId: 'user-1',
-        slotTime: slot,
-        durationMin: 25,
-        status: 'MATCHED',
-        sessionId: 'session-late',
-      });
-
-      // Transaction mocks
-      (prisma.bookingRequest.update as ReturnType<typeof vi.fn>).mockResolvedValueOnce({});
-      (prisma.session.update as ReturnType<typeof vi.fn>).mockResolvedValueOnce({});
-      (prisma.bookingRequest.findFirst as ReturnType<typeof vi.fn>).mockResolvedValueOnce(null); // No partner found
-      // No partner update needed
-
-      // Late cancellation penalty: user.update (increment strikeCount)
-      (prisma.user.update as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
-        ...FULL_USER,
-        strikeCount: 1,
-      });
-
-      const res = await request(app)
-        .delete('/api/v1/bookings/booking-late')
-        .set('Cookie', [authCookie('user-1')]);
-
-      expect(res.status).toBe(200);
-      // Verify strikeCount was incremented
-      expect(prisma.user.update).toHaveBeenCalledWith(
-        expect.objectContaining({
-          where: { id: 'user-1' },
-          data: { strikeCount: { increment: 1 } },
-        })
-      );
-    });
-
-    it('should NOT increment strikeCount for early cancellation (> 1 hour)', async () => {
-      // Slot is 3 hours from now (> 1 hour)
-      const slot = new Date(Date.now() + 3 * 60 * 60 * 1000);
-      slot.setMinutes(0, 0, 0);
-
-      // Auth
-      (prisma.user.findUnique as ReturnType<typeof vi.fn>).mockResolvedValueOnce(AUTH_USER);
-
-      // Find booking — MATCHED, slot > 1 hour away
-      (prisma.bookingRequest.findUnique as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
-        id: 'booking-early',
-        userId: 'user-1',
-        slotTime: slot,
-        durationMin: 50,
-        status: 'MATCHED',
-        sessionId: 'session-early',
-      });
-
-      // Transaction mocks
-      (prisma.bookingRequest.update as ReturnType<typeof vi.fn>).mockResolvedValueOnce({});
-      (prisma.session.update as ReturnType<typeof vi.fn>).mockResolvedValueOnce({});
-      (prisma.bookingRequest.findFirst as ReturnType<typeof vi.fn>).mockResolvedValueOnce(null);
-
-      const res = await request(app)
-        .delete('/api/v1/bookings/booking-early')
-        .set('Cookie', [authCookie('user-1')]);
-
-      expect(res.status).toBe(200);
-      // user.update should NOT have been called — no penalty
-      expect(prisma.user.update).not.toHaveBeenCalled();
     });
 
     it('should return 403 for non-owner trying to cancel', async () => {

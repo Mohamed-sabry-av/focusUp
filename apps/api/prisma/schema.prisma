@@ -51,42 +51,62 @@ enum BookingRequestStatus {
   PENDING
   MATCHED
   CANCELLED
+  LATE_CANCELLED
   EXPIRED
+  NO_SHOW
+  SOLO
+  COMPLETED
+}
+
+enum TaskType {
+  DESK
+  WALK
+}
+
+enum StrikeReason {
+  NO_SHOW
+  LATE_CANCEL
+  ADMIN
 }
 
 // MODELS
 
 model User {
-  id               String       @id @default(cuid())
-  email            String       @unique
-  displayName      String
-  username         String       @unique
-  avatarUrl        String?
-  timezone         String       @default("UTC")
-  categories       Category[]
-  preferredLength  Int[]        @default([25, 50])
+  id              String     @id @default(cuid())
+  email           String     @unique
+  displayName     String
+  username        String     @unique
+  avatarUrl       String?
+  timezone        String     @default("UTC")
+  categories      Category[]
+  preferredLength Int[]      @default([25, 50])
 
   stripeCustomerId String?
-  planTier         PlanTier     @default(FREE)
-  strikeCount      Int          @default(0)
-  isActive         Boolean      @default(true)
-  isBanned         Boolean      @default(false)
-  emailVerified    Boolean      @default(false)
-  isAdmin          Boolean      @default(false)
-  createdAt        DateTime     @default(now())
-  updatedAt        DateTime     @updatedAt
+  planTier         PlanTier  @default(FREE)
+  suspendedUntil   DateTime?
+  hidePhoto        Boolean   @default(false)
+  dataSaver        Boolean   @default(false)
+  isActive         Boolean   @default(true)
+  isBanned         Boolean   @default(false)
+  emailVerified    Boolean   @default(false)
+  isAdmin          Boolean   @default(false)
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
 
-  sessionsAsUser1  Session[]    @relation("User1Sessions")
-  sessionsAsUser2  Session[]    @relation("User2Sessions")
-  reflections      Reflection[]
-  reportsGiven     Report[]     @relation("Reporter")
-  reportsReceived  Report[]     @relation("Reported")
-  blocks           Block[]      @relation("Blocker")
-  blockedBy        Block[]      @relation("Blocked")
-  bookingRequests  BookingRequest[]
-  preferences      UserPreferences?
-  authSessions     AuthSession[]
-  accounts         Account[]
+  sessionsAsUser1 Session[]        @relation("User1Sessions")
+  sessionsAsUser2 Session[]        @relation("User2Sessions")
+  reflections     Reflection[]
+  reportsGiven    Report[]         @relation("Reporter")
+  reportsReceived Report[]         @relation("Reported")
+  blocks          Block[]          @relation("Blocker")
+  blockedBy       Block[]          @relation("Blocked")
+  bookingRequests BookingRequest[]
+  preferences     UserPreferences?
+  authSessions    AuthSession[]
+  accounts        Account[]
+  strikes         Strike[]
+  favorites       Favorite[]       @relation("FavoriteOwner")
+  favoritedBy     Favorite[]       @relation("FavoriteTarget")
 }
 
 // Better Auth tables. AuthSession is a login session; Session below is a focus session.
@@ -100,7 +120,7 @@ model AuthSession {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
 }
@@ -120,7 +140,7 @@ model Account {
   createdAt             DateTime  @default(now())
   updatedAt             DateTime  @updatedAt
 
-  user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([providerId, accountId])
   @@index([userId])
@@ -138,23 +158,24 @@ model Verification {
 }
 
 model Session {
-  id              String        @id @default(cuid())
-  user1Id         String
-  user2Id         String?
-  durationMin     Int
-  status          SessionStatus @default(PENDING)
-  scheduledAt     DateTime
-  startedAt       DateTime?
-  endedAt         DateTime?
+  id          String        @id @default(cuid())
+  user1Id     String
+  user2Id     String?
+  isSolo      Boolean       @default(false)
+  durationMin Int
+  status      SessionStatus @default(PENDING)
+  scheduledAt DateTime
+  startedAt   DateTime?
+  endedAt     DateTime?
 
-  livekitRoomName String        @unique
+  livekitRoomName String    @unique
   category        Category?
   user1Goal       String?
   user2Goal       String?
-  createdAt       DateTime      @default(now())
+  createdAt       DateTime  @default(now())
 
-  user1           User          @relation("User1Sessions", fields: [user1Id], references: [id])
-  user2           User?         @relation("User2Sessions", fields: [user2Id], references: [id])
+  user1           User             @relation("User1Sessions", fields: [user1Id], references: [id])
+  user2           User?            @relation("User2Sessions", fields: [user2Id], references: [id])
   reflections     Reflection[]
   reports         Report[]
   bookingRequests BookingRequest[]
@@ -173,8 +194,8 @@ model Reflection {
   rating    Int?
   createdAt DateTime @default(now())
 
-  session   Session  @relation(fields: [sessionId], references: [id])
-  user      User     @relation(fields: [userId], references: [id])
+  session Session @relation(fields: [sessionId], references: [id])
+  user    User    @relation(fields: [userId], references: [id])
 }
 
 model Report {
@@ -187,9 +208,9 @@ model Report {
   status      ReportStatus @default(OPEN)
   createdAt   DateTime     @default(now())
 
-  reporter    User         @relation("Reporter", fields: [reporterId], references: [id])
-  reported    User         @relation("Reported", fields: [reportedId], references: [id])
-  session     Session?     @relation(fields: [sessionId], references: [id])
+  reporter User     @relation("Reporter", fields: [reporterId], references: [id])
+  reported User     @relation("Reported", fields: [reportedId], references: [id])
+  session  Session? @relation(fields: [sessionId], references: [id])
 }
 
 model Block {
@@ -198,10 +219,39 @@ model Block {
   blockedId String
   createdAt DateTime @default(now())
 
-  blocker   User     @relation("Blocker", fields: [blockerId], references: [id])
-  blocked   User     @relation("Blocked", fields: [blockedId], references: [id])
+  blocker User @relation("Blocker", fields: [blockerId], references: [id])
+  blocked User @relation("Blocked", fields: [blockedId], references: [id])
 
   @@unique([blockerId, blockedId])
+  @@index([blockerId])
+  @@index([blockedId])
+}
+
+model Favorite {
+  userId     String
+  favoriteId String
+  createdAt  DateTime @default(now())
+
+  user     User @relation("FavoriteOwner", fields: [userId], references: [id], onDelete: Cascade)
+  favorite User @relation("FavoriteTarget", fields: [favoriteId], references: [id], onDelete: Cascade)
+
+  @@id([userId, favoriteId])
+  @@index([favoriteId])
+}
+
+model Strike {
+  id               String       @id @default(cuid())
+  userId           String
+  bookingRequestId String?
+  reason           StrikeReason
+  note             String?
+  createdAt        DateTime     @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // A booking can only earn one strike per reason, so a retried job cannot strike twice.
+  @@unique([bookingRequestId, reason])
+  @@index([userId, createdAt])
 }
 
 model BookingRequest {
@@ -211,34 +261,42 @@ model BookingRequest {
   durationMin Int
   status      BookingRequestStatus @default(PENDING)
   sessionId   String?
-  createdAt   DateTime             @default(now())
-  updatedAt   DateTime             @updatedAt
 
-  user        User                 @relation(fields: [userId], references: [id])
-  session     Session?             @relation(fields: [sessionId], references: [id])
+  // Matching preferences (soft: they order candidates, they never block a match)
+  cameraOn      Boolean  @default(true)
+  quiet         Boolean  @default(false)
+  taskType      TaskType @default(DESK)
+  flexible      Boolean  @default(true)
+  countsToQuota Boolean  @default(true)
 
-  @@unique([userId, slotTime, durationMin])
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user    User     @relation(fields: [userId], references: [id])
+  session Session? @relation(fields: [sessionId], references: [id])
+
+  @@index([userId, slotTime])
   @@index([slotTime])
   @@index([status])
   @@index([userId])
 }
 
 model UserPreferences {
-  id                    String   @id @default(cuid())
-  userId                String   @unique
-  googleCalendarSync    Boolean  @default(false)
-  emailCalendarInvites  Boolean  @default(true)
-  performanceReports    Boolean  @default(true)
-  desktopNotifications  Boolean  @default(true)
-  quietMode             Boolean  @default(false)
-  preferFavorites       Boolean  @default(false)
-  timeFormat            String   @default("12h")
-  weekStartsOn          String   @default("monday")
-  autoRematch           Boolean  @default(false)
-  mutedOnJoin           Boolean  @default(false)
-  availability          String   @default("everyone")
-  createdAt             DateTime @default(now())
-  updatedAt             DateTime @updatedAt
+  id                   String   @id @default(cuid())
+  userId               String   @unique
+  googleCalendarSync   Boolean  @default(false)
+  emailCalendarInvites Boolean  @default(true)
+  performanceReports   Boolean  @default(true)
+  desktopNotifications Boolean  @default(true)
+  quietMode            Boolean  @default(false)
+  preferFavorites      Boolean  @default(false)
+  timeFormat           String   @default("12h")
+  weekStartsOn         String   @default("monday")
+  autoRematch          Boolean  @default(false)
+  mutedOnJoin          Boolean  @default(false)
+  availability         String   @default("everyone")
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
