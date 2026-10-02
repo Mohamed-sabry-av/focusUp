@@ -15,9 +15,12 @@ import { withSerializableRetry } from '../../../lib/transactions';
 import { FREE_WEEKLY_LIMIT } from '../../../lib/quota';
 import {
   scheduleNoshowCheck,
+  scheduleRematchChecks,
   scheduleReminders,
   scheduleBookingExpiry,
   removeJob,
+  REMATCH_CHECK_MINUTES,
+  rematchJobId,
 } from '../../../queues/helpers';
 import { NotificationService } from '../../../services/notification.service';
 import { isOverQuota } from '../../../services/quota.service';
@@ -146,6 +149,7 @@ export class BookingsService {
 
     if (session) {
       await scheduleNoshowCheck(session.id, session.scheduledAt);
+      await scheduleRematchChecks(session.id, session.scheduledAt);
       await scheduleReminders(session.id, session.scheduledAt);
       await NotificationService.notifyMatch(session);
 
@@ -282,6 +286,9 @@ export class BookingsService {
     // Jobs that belonged to the cancelled session
     if (booking.sessionId) {
       await removeJob('session-noshow', `noshow-${booking.sessionId}`);
+      for (const minute of REMATCH_CHECK_MINUTES) {
+        await removeJob('session-rematch', rematchJobId(booking.sessionId, minute));
+      }
       await removeJob('session-reminder', `reminder-24h-${booking.sessionId}`);
       await removeJob('session-reminder', `reminder-5m-${booking.sessionId}`);
     }
@@ -291,6 +298,7 @@ export class BookingsService {
       const rematchSession = await MatchingService.matchBookingRequest(partnerBooking.id);
       if (rematchSession) {
         await scheduleNoshowCheck(rematchSession.id, rematchSession.scheduledAt);
+        await scheduleRematchChecks(rematchSession.id, rematchSession.scheduledAt);
         await scheduleReminders(rematchSession.id, rematchSession.scheduledAt);
         await NotificationService.notifyMatch(rematchSession);
       } else {

@@ -30,6 +30,10 @@ export const env = createEnv({
       .default("false")
       .transform((value) => value === "true"),
 
+    // LiveKit. Tokens are signed here and webhooks are verified with the same pair. No default.
+    LIVEKIT_API_KEY: z.string().min(1),
+    LIVEKIT_API_SECRET: z.string().min(32),
+
     // Email. Without a key, emails are logged (development and test only).
     RESEND_API_KEY: z.string().min(1).optional(),
     EMAIL_FROM: z.string().min(3).default("FocusUp <no-reply@localhost>"),

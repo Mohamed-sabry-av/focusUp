@@ -141,13 +141,14 @@ Legend used in this doc:
 |---|---|
 | T-24h / T-1h / T-10m | Reminders (email + Web Push) |
 | T-5m | "Join" button becomes active |
-| T0 → T+2m | Check-in: each user writes a goal (visible to partner) + optional voice hello. Optional task list |
+| T0 → T+2m | Check-in: each user writes a goal (visible to partner). Optional task list (voice hello: v2) |
 | T+1m | **[v1.1]** Partner not here yet → rematch offered if another compatible user is available |
 | T+3m | **[v1.1]** Still no partner → solo session offered (timer, no quota, no strike) |
 | T+5m | Absent user marked NO_SHOW + 1 strike |
 | T+2m → T+45m | Focus: camera per booking choice, mic optional (Quiet = mic disabled) |
 | T+45m | 5-minute warning |
-| T+48m → T+50m | Check-out: tick tasks done, short reflection, 1–5 self-rating, optional voice wrap-up |
+| T+45m → T+50m | "Keep going 15 min" can be chosen (per person, up to twice) |
+| T+48m → T+50m | Check-out: tick tasks done, short reflection, 1–5 rating of the session (voice wrap-up: v2) |
 | T+50m | Session ends. Room closes at T+52m (grace) |
 
 25 and 75-minute sessions scale the same way: check-in 2 min, check-out 2 min.
@@ -158,11 +159,12 @@ Legend used in this doc:
 |---|---|
 | Video | Per booking: camera on/off. Camera-off users show avatar + name. **[v1.1]** When choices differ, the camera-on partner sees a "Camera off" badge |
 | Video quality | **[v1.1]** Dynamic. Each user sends 3 simulcast layers (about 180p / 360p / 720p). LiveKit gives the partner the layer their connection can handle and switches live (adaptive stream); layers nobody watches stop being encoded (dynacast). "Data saver" caps the user's video at 360p, about a quarter of the data of full HD (which can reach ~1.3 GB per 50-min session, send + receive). VP8 for the widest device support [A] |
-| Mic | Optional; Quiet users cannot unmute. **[v1.1]** Partner of a Quiet user sees a "Quiet mode" badge |
+| Mic | Optional; Quiet users cannot unmute (the server refuses the microphone in their token). **[v1.1]** Partner of a Quiet user sees a "Quiet mode" badge |
 | Text chat | LiveKit data channel. [A] Not stored after the session (privacy); last 50 messages attached to a report if one is filed |
 | Screen share | Opt-in per session, never auto-start |
-| Task list | Up to 10 tasks; stored with the user's booking |
-| Report & block | One click: ends the session for the reporter, files a report, blocks both ways |
+| Task list | Up to 10 tasks per person per session; private (the partner sees only the goal) |
+| Keep going | One tap adds 15 minutes for that person only; the partner may leave at the normal end. Up to twice. No quota, no strike |
+| Report & block | One click: ends the session, files a report with the last 50 chat lines, blocks both ways. No automatic strike |
 | Reconnect | One automatic reconnect; 2-minute grace before the user is counted as left |
 | Presence | **[v1.1]** Joins and leaves come from LiveKit webhooks (signature-verified), never from the browser |
 
@@ -213,7 +215,7 @@ With camera and Quiet as soft preferences, each start time has only 3 pools (one
 | Situation | Result |
 |---|---|
 | No match by T+3m | Offer solo session with timer. Not counted in quota, no strike |
-| Partner absent at T+1m | **[v1.1]** Rematch offered; if no one by T+3m → solo offer |
+| Partner absent at T+1m | **[v1.1]** Rematch: if another person is also waiting alone for the same time and length (and you have not blocked each other), you are paired; otherwise solo offer at T+3m. The absent partners still get their strike at T+5m |
 | User never joins by T+5m | Booking marked NO_SHOW → 1 strike |
 | Partner joins late after a rematch | Show "your partner was rematched" + offer rematch / solo |
 
@@ -339,7 +341,7 @@ Jobs are stored in Postgres, so they survive restarts and are included in databa
 - Tokens generated server-side only, 2-hour TTL, in-memory on the client.
 - Room name = session id. Simulcast (3 layers, up to 720p), adaptiveStream and dynacast on. Data saver caps the publisher at the 360p layer.
 - Camera-off and Quiet enforced in the token's permissions (no camera / no microphone source).
-- **[v1.1]** Webhooks are signature-verified and are the source of truth for join/leave.
+- **[v1.1]** Webhooks are signature-verified and are the source of truth for join/leave; presence is stored in Postgres (`SessionParticipant`).
 
 ## 10. Data model (Prisma, simplified)
 
@@ -483,3 +485,4 @@ Checked in mid-December 2026:
 |---|---|---|
 | 1.0 | 1 Oct 2026 | First spec from the founder's grill session |
 | 1.1 | 2 Oct 2026 | Focusmate experience (camera and Quiet as soft preferences with badges, booked people on calendar, lock at booking, rematch T+1 / solo T+3); sign-in = email + Google only; one-server hosting; REST-only backend, Better Auth, pg-boss (no Redis), socket.io; dynamic video up to 720p with Data saver; beta date and success criteria. Details in `docs/DECISIONS.md` |
+| 1.1.1 | 3 Oct 2026 | Room details: keep going +15 min per person, voice notes moved to v2, re-match pairs two lonely people, report text is plain text. See `docs/DECISIONS.md` R1-R11 |

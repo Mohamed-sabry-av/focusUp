@@ -9,6 +9,9 @@ import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 // Real database and real auth, but no Redis, queues or sockets.
 vi.mock('../queues/helpers', () => ({
   scheduleNoshowCheck: vi.fn().mockResolvedValue(undefined),
+  scheduleRematchChecks: vi.fn().mockResolvedValue(undefined),
+  REMATCH_CHECK_MINUTES: [1, 2],
+  rematchJobId: (sessionId: string, minute: number) => `rematch-${minute}-${sessionId}`,
   scheduleReminders: vi.fn().mockResolvedValue(undefined),
   scheduleBookingExpiry: vi.fn().mockResolvedValue(undefined),
   removeJob: vi.fn().mockResolvedValue(undefined),

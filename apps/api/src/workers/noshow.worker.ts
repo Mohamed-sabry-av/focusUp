@@ -2,7 +2,6 @@ import type { Job } from "bullmq";
 import { Worker } from "bullmq";
 import { connection } from "../queues/connection";
 import { prisma } from "../lib/prisma";
-import { redis } from "../lib/redis";
 import { NotificationService } from "../services/notification.service";
 import { EmailService } from "../services/email.service";
 import { removeJob } from "../queues/helpers";
@@ -25,23 +24,30 @@ export async function processNoshowJob(job: Job<NoshowJobData>): Promise<void> {
     return;
   }
 
-  // Only trigger NO_SHOW if still CONFIRMED (not ACTIVE, COMPLETED, or CANCELLED)
-  if (session.status !== "CONFIRMED") {
+  // A solo session is ACTIVE on purpose: the partner is still checked, the session carries on.
+  const solo = session.status === "ACTIVE" && session.isSolo;
+
+  // Only trigger NO_SHOW if still CONFIRMED (or solo); not ACTIVE with both in, COMPLETED or CANCELLED
+  if (session.status !== "CONFIRMED" && !solo) {
     console.log(
       `[noshow] Session ${sessionId} already ${session.status}, skipping`,
     );
     return;
   }
 
-  // Determine who joined via Redis set
-  const redisKey = `session:joined:${sessionId}`;
-  const joinedUserIds = await redis.smembers(redisKey);
-
-  // Mark session as NO_SHOW
-  await prisma.session.update({
-    where: { id: sessionId },
-    data: { status: "NO_SHOW" },
+  // Who was in the room: written only from signature-verified LiveKit webhooks.
+  const participants = await prisma.sessionParticipant.findMany({
+    where: { sessionId, firstJoinedAt: { not: null } },
+    select: { userId: true },
   });
+  const joinedUserIds = participants.map((p) => p.userId);
+
+  if (!solo) {
+    await prisma.session.update({
+      where: { id: sessionId },
+      data: { status: "NO_SHOW" },
+    });
+  }
 
   // Determine absent and present participants
   const participantIds = [session.user1Id, session.user2Id].filter(
@@ -82,8 +88,8 @@ export async function processNoshowJob(job: Job<NoshowJobData>): Promise<void> {
     });
   }
 
-  // Notify present users via WebSocket + email
-  for (const userId of presentUserIds) {
+  // Notify present users via WebSocket + email (not when they chose to work alone)
+  for (const userId of solo ? [] : presentUserIds) {
     const userRecord =
       userId === session.user1Id ? session.user1 : session.user2;
     await NotificationService.notifyNoShow(session, userId);

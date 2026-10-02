@@ -1,10 +1,19 @@
 import sanitizeHtml from 'sanitize-html';
 import { prisma } from '../../../lib/prisma';
 import { AppError } from '../../../utils/errors';
-import type { CreateReportInput } from '@focusUp/shared-types';
+import type { ChatLine, CreateReportInput } from '@focusUp/shared-types';
+
+/** Report text is shown to admins as plain text: no HTML at all. */
+function plainText(value: string): string {
+  return sanitizeHtml(value, { allowedTags: [], allowedAttributes: {} });
+}
+
+function cleanChat(chat: ChatLine[]): ChatLine[] {
+  return chat.map((line) => ({ from: plainText(line.from), text: plainText(line.text), at: line.at }));
+}
 
 export class ReportsService {
-  static async createReport(reporterId: string, data: CreateReportInput) {
+  static async createReport(reporterId: string, data: CreateReportInput, chat: ChatLine[] = []) {
     // 1. Cannot report yourself
     if (data.reportedId === reporterId) {
       throw new AppError('You cannot report yourself', 400);
@@ -47,7 +56,7 @@ export class ReportsService {
     if (existing) throw new AppError('You have already reported this user for this session', 409);
 
     // 5. Sanitize free-text description before persisting
-    const description = data.description ? sanitizeHtml(data.description) : undefined;
+    const description = data.description ? plainText(data.description) : undefined;
 
     // 6. Persist the report
     const report = await prisma.report.create({
@@ -57,6 +66,7 @@ export class ReportsService {
         sessionId: data.sessionId,
         reason: data.reason,
         description,
+        chatSnapshot: chat.length > 0 ? cleanChat(chat) : undefined,
         status: 'OPEN',
       },
     });

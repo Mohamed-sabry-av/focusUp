@@ -23,7 +23,6 @@ vi.mock("../queues/connection", () => ({ connection: {} }));
 
 const {
   mockPrisma,
-  mockRedis,
   mockNotificationService,
   mockEmailService,
   mockRemoveJob,
@@ -34,14 +33,14 @@ const {
       findUnique: vi.fn(),
       update: vi.fn(),
     },
+    sessionParticipant: {
+      findMany: vi.fn(),
+    },
     bookingRequest: {
       findFirst: vi.fn(),
       update: vi.fn(),
       updateMany: vi.fn(),
     },
-  },
-  mockRedis: {
-    smembers: vi.fn(),
   },
   mockNotificationService: {
     notifyNoShow: vi.fn(),
@@ -53,7 +52,6 @@ const {
   mockAddStrike: vi.fn(),
 }));
 vi.mock("../lib/prisma", () => ({ prisma: mockPrisma }));
-vi.mock("../lib/redis", () => ({ redis: mockRedis }));
 vi.mock("../services/notification.service", () => ({
   NotificationService: mockNotificationService,
 }));
@@ -93,6 +91,7 @@ interface FakeSession {
   user1Id: string;
   user2Id: string | null;
   status: SessionStatus;
+  isSolo: boolean;
   scheduledAt: Date;
   durationMin: number;
   user1: FakeUser;
@@ -105,12 +104,18 @@ function makeSession(overrides: Partial<FakeSession> = {}): FakeSession {
     user1Id: "user-1",
     user2Id: "user-2",
     status: "CONFIRMED",
+    isSolo: false,
     scheduledAt: new Date("2025-01-01T10:00:00Z"),
     durationMin: 50,
     user1: { id: "user-1", email: "u1@test.com", displayName: "User One" },
     user2: { id: "user-2", email: "u2@test.com", displayName: "User Two" },
     ...overrides,
   };
+}
+
+/** Who has been in the LiveKit room (from webhooks). */
+function mockJoined(userIds: string[]): void {
+  mockPrisma.sessionParticipant.findMany.mockResolvedValue(userIds.map((userId) => ({ userId })));
 }
 
 function makeJob(data: NoshowJobData): Job<NoshowJobData> {
@@ -150,7 +155,7 @@ describe("processNoshowJob", () => {
 
   it("marks a CONFIRMED session as NO_SHOW", async () => {
     mockPrisma.session.findUnique.mockResolvedValue(makeSession());
-    mockRedis.smembers.mockResolvedValue([]);
+    mockJoined([]);
 
     await processNoshowJob(makeJob({ sessionId: "sess-001" }));
 
@@ -162,7 +167,7 @@ describe("processNoshowJob", () => {
 
   it("gives each absent user a NO_SHOW booking and one strike tied to that booking", async () => {
     mockPrisma.session.findUnique.mockResolvedValue(makeSession());
-    mockRedis.smembers.mockResolvedValue([]);
+    mockJoined([]);
 
     await processNoshowJob(makeJob({ sessionId: "sess-001" }));
 
@@ -189,7 +194,7 @@ describe("processNoshowJob", () => {
 
   it("only strikes the user who did not join, and gives the present user their session back", async () => {
     mockPrisma.session.findUnique.mockResolvedValue(makeSession());
-    mockRedis.smembers.mockResolvedValue(["user-1"]); // user-1 joined, user-2 did not
+    mockJoined(["user-1"]); // user-1 joined, user-2 did not
     mockNotificationService.notifyNoShow.mockResolvedValue(undefined);
     mockEmailService.sendPartnerNoShowNotification.mockResolvedValue(undefined);
 
@@ -208,7 +213,7 @@ describe("processNoshowJob", () => {
 
   it("notifies the present user that their partner did not show", async () => {
     mockPrisma.session.findUnique.mockResolvedValue(makeSession());
-    mockRedis.smembers.mockResolvedValue(["user-1"]);
+    mockJoined(["user-1"]);
     mockNotificationService.notifyNoShow.mockResolvedValue(undefined);
     mockEmailService.sendPartnerNoShowNotification.mockResolvedValue(undefined);
 
@@ -227,7 +232,7 @@ describe("processNoshowJob", () => {
 
   it("notifies nobody and refunds nobody when both users are absent", async () => {
     mockPrisma.session.findUnique.mockResolvedValue(makeSession());
-    mockRedis.smembers.mockResolvedValue([]);
+    mockJoined([]);
 
     await processNoshowJob(makeJob({ sessionId: "sess-001" }));
 
@@ -238,12 +243,43 @@ describe("processNoshowJob", () => {
 
   it("removes the reminder jobs after marking the no-show", async () => {
     mockPrisma.session.findUnique.mockResolvedValue(makeSession());
-    mockRedis.smembers.mockResolvedValue([]);
+    mockJoined([]);
     mockRemoveJob.mockResolvedValue(undefined);
 
     await processNoshowJob(makeJob({ sessionId: "sess-001" }));
 
     expect(mockRemoveJob).toHaveBeenCalledWith("session-reminder", "reminder-24h-sess-001");
     expect(mockRemoveJob).toHaveBeenCalledWith("session-reminder", "reminder-5m-sess-001");
+  });
+
+  it("keeps a solo session going, but still strikes the partner who never came", async () => {
+    mockPrisma.session.findUnique.mockResolvedValue(makeSession({ status: "ACTIVE", isSolo: true }));
+    mockJoined(["user-1"]);
+
+    await processNoshowJob(makeJob({ sessionId: "sess-001" }));
+
+    expect(mockPrisma.session.update).not.toHaveBeenCalled();
+    expect(mockAddStrike).toHaveBeenCalledTimes(1);
+    expect(mockAddStrike).toHaveBeenCalledWith(
+      expect.objectContaining({ userId: "user-2", reason: "NO_SHOW" }),
+    );
+    // The person working alone does not use their weekly quota and is not told their session ended
+    expect(mockPrisma.bookingRequest.updateMany).toHaveBeenCalledWith({
+      where: { sessionId: "sess-001", userId: { in: ["user-1"] } },
+      data: { countsToQuota: false },
+    });
+    expect(mockNotificationService.notifyNoShow).not.toHaveBeenCalled();
+  });
+
+  it("reads who was present from the database, never from the browser", async () => {
+    mockPrisma.session.findUnique.mockResolvedValue(makeSession());
+    mockJoined(["user-1"]);
+
+    await processNoshowJob(makeJob({ sessionId: "sess-001" }));
+
+    expect(mockPrisma.sessionParticipant.findMany).toHaveBeenCalledWith({
+      where: { sessionId: "sess-001", firstJoinedAt: { not: null } },
+      select: { userId: true },
+    });
   });
 });

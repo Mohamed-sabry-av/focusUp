@@ -150,6 +150,99 @@ export const UpdatePreferencesInput = z.object({
 });
 export type UpdatePreferencesInput = z.infer<typeof UpdatePreferencesInput>;
 
+// SESSION ROOM (spec §4). The phase is decided by the server, never by the browser.
+
+export const SESSION_PHASES = [
+  "UPCOMING",
+  "LOBBY",
+  "WAITING_FOR_PARTNER",
+  "FINDING_REMATCH",
+  "SOLO_OFFER",
+  "PARTNER_ABSENT",
+  "IN_SESSION",
+  "EXTENDED",
+  "CHECK_OUT",
+  "ENDED",
+] as const;
+export const SessionPhase = z.enum(SESSION_PHASES);
+export type SessionPhase = z.infer<typeof SessionPhase>;
+
+export const SessionRoomPerson = z.object({
+  id: z.string(),
+  displayName: z.string(),
+  /** Null when the person hides their photo. */
+  avatarUrl: z.string().nullable(),
+  quiet: z.boolean(),
+  /** In the LiveKit room right now (from webhooks). */
+  isPresent: z.boolean(),
+});
+export type SessionRoomPerson = z.infer<typeof SessionRoomPerson>;
+
+export const SessionRoomResponse = z.object({
+  id: z.string(),
+  status: z.nativeEnum(SessionStatus),
+  phase: SessionPhase,
+  isSolo: z.boolean(),
+  durationMin: z.number().int(),
+  scheduledAt: z.string().datetime(),
+  /** When this person's time ends (the booked end, or their own "keep going" end). */
+  endsAt: z.string().datetime(),
+  joinOpensAt: z.string().datetime(),
+  /** The server clock, so the countdown is right even when the device clock is not. */
+  serverTime: z.string().datetime(),
+  me: SessionRoomPerson.extend({
+    goal: z.string().nullable(),
+    extensionsLeft: z.number().int(),
+  }),
+  partner: SessionRoomPerson.nullable(),
+  partnerGoal: z.string().nullable(),
+  /** Set when the person was paired with someone else; the browser moves to that session. */
+  rematchedToSessionId: z.string().nullable(),
+  canExtend: z.boolean(),
+});
+export type SessionRoomResponse = z.infer<typeof SessionRoomResponse>;
+
+export const SessionTokenResponse = z.object({ token: z.string() });
+export type SessionTokenResponse = z.infer<typeof SessionTokenResponse>;
+
+export const SetGoalInput = z.object({ goal: z.string().trim().min(1).max(200) });
+export type SetGoalInput = z.infer<typeof SetGoalInput>;
+
+export const MAX_SESSION_TASKS = 10;
+export const SessionTaskDto = z.object({
+  id: z.string(),
+  text: z.string(),
+  done: z.boolean(),
+  position: z.number().int(),
+});
+export type SessionTaskDto = z.infer<typeof SessionTaskDto>;
+
+export const CreateSessionTaskInput = z.object({ text: z.string().trim().min(1).max(120) });
+export type CreateSessionTaskInput = z.infer<typeof CreateSessionTaskInput>;
+
+export const UpdateSessionTaskInput = z
+  .object({ text: z.string().trim().min(1).max(120).optional(), done: z.boolean().optional() })
+  .refine((value) => value.text !== undefined || value.done !== undefined, {
+    message: "Nothing to update",
+  });
+export type UpdateSessionTaskInput = z.infer<typeof UpdateSessionTaskInput>;
+
+/** One chat line, sent by the reporter's browser. Chat is not stored on the server. */
+export const ChatLine = z.object({
+  from: z.string().max(100),
+  text: z.string().max(500),
+  at: z.string().datetime(),
+});
+export type ChatLine = z.infer<typeof ChatLine>;
+
+export const MAX_REPORT_CHAT_LINES = 50;
+export const ReportFromRoomInput = z.object({
+  reason: z.nativeEnum(ReportReason),
+  description: z.string().max(1000).optional(),
+  chat: z.array(ChatLine).max(MAX_REPORT_CHAT_LINES).default([]),
+});
+export type ReportFromRoomInput = z.infer<typeof ReportFromRoomInput>;
+
 // API RESPONSE WRAPPERS
 
 export interface ApiResponse<T> {

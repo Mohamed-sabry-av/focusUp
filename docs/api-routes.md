@@ -51,7 +51,7 @@ Client code uses `authClient` from `apps/web/src/lib/auth-client.ts`; the table 
 
 ### Verified email
 
-`/api/v1` routes use the session through `authMiddleware`. These routes also require a **verified email** (`403 "Please verify your email first"`): `POST /bookings`, `GET /sessions/token/:sessionId`, `PATCH /sessions/join/:sessionId`. Google sign-ups count as verified.
+`/api/v1` routes use the session through `authMiddleware`. These routes also require a **verified email** (`403 "Please verify your email first"`): `POST /bookings`, `GET /sessions/:sessionId/token` (and the old `GET /sessions/token/:sessionId`), `PATCH /sessions/join/:sessionId`. Google sign-ups count as verified.
 
 A banned or deactivated user gets `403` on every `/api/v1` route straight away, and cannot start a new session.
 
@@ -126,54 +126,95 @@ A banned or deactivated user gets `403` on every `/api/v1` route straight away, 
 
 ---
 
-### GET /api/v1/sessions/token/:sessionId
+### GET /api/v1/sessions/:sessionId
 
-- **Auth**: Required
-- **Params**: `sessionId` — cuid of the session
+- **Auth**: Required (participant of the session)
+- **Response**: `200 { data: SessionRoomResponse, statusCode: 200 }` (Zod schema in `packages/shared-types`): `id`, `status`, `phase`, `isSolo`, `durationMin`, `scheduledAt`, `endsAt` (this person's end, including their own "keep going"), `joinOpensAt`, `serverTime`, `me` (with `goal`, `extensionsLeft`, `quiet`, `isPresent`), `partner` (`displayName`, `avatarUrl` is `null` when they hide their photo, `quiet`, `isPresent`), `partnerGoal`, `rematchedToSessionId`, `canExtend`
+- **Phases** (decided by the server): `UPCOMING` (more than 5 min before the start), `LOBBY`, `WAITING_FOR_PARTNER` (T to T+1), `FINDING_REMATCH` (T+1 to T+3), `SOLO_OFFER` (T+3 to T+5), `PARTNER_ABSENT` (T+5, before the no-show job runs), `IN_SESSION`, `CHECK_OUT` (after the end), `EXTENDED` (this person kept going), `ENDED`
+- **Notes**: `isPresent` comes from LiveKit webhooks only. When `rematchedToSessionId` is set, the browser moves to that session.
+- **Errors**: `401`, `403` not a participant, `404`
+
+---
+
+### GET /api/v1/sessions/:sessionId/token
+
+- **Auth**: Required + verified email. (The old path `GET /sessions/token/:sessionId` still works until the new room screen replaces it.)
 - **Response**: `200 { data: { token: string }, statusCode: 200 }` — LiveKit access token (expires in 2 hours)
-- **Notes**: Token is generated server-side only. User must be `user1` or `user2` of the session. Session must be in `CONFIRMED` or `ACTIVE` status.
-- **Errors**: `401` not authenticated, `403` not a participant or session not joinable, `404` session not found, `500` LiveKit credentials not configured
+- **Notes**: Generated server-side only. Allowed from 5 minutes before the start until 5 minutes after the end (or the person's own "keep going" end). The grant carries the permissions: a **Quiet** person gets no microphone source (`canPublishSources` = camera and screen share only), everyone may publish data (chat). Participant metadata is only `{ "quiet": boolean }`.
+- **Errors**: `401`, `403` not a participant / room not open yet / session ended, `404`, `409` the person was paired with someone else (follow `rematchedToSessionId`)
 
 ---
 
-### PATCH /api/v1/sessions/goal/:sessionId
+### PATCH /api/v1/sessions/:sessionId/goal
 
-- **Auth**: Required
-- **Params**: `sessionId`
-- **Body**: `{ goal: string (max 200 chars) }`
+- **Auth**: Required. (Old path `PATCH /sessions/goal/:sessionId` still works.)
+- **Body**: `{ goal: string (1–200 chars) }`
 - **Response**: `200 { data: { ...updatedSession }, statusCode: 200 }`
-- **Errors**: `400` missing/invalid goal or exceeds 200 chars, `401` not authenticated, `403` not a participant, `404` session not found
+- **Errors**: `400` invalid goal, `401`, `403` not a participant, `404`
 
 ---
 
-### PATCH /api/v1/sessions/join/:sessionId
+### POST /api/v1/sessions/:sessionId/extend
 
 - **Auth**: Required
-- **Params**: `sessionId`
-- **Body**: None
-- **Response**: `200 { data: { session, isActive: boolean }, statusCode: 200 }`
-- **Notes**: Tracks join state in Redis. When both participants have joined, session status transitions to `ACTIVE` and `startedAt` is set.
-- **Errors**: `400` session cannot be joined in current state, `401` not authenticated, `403` not a participant, `404` session not found
+- **Response**: `200 { data: SessionRoomResponse }`
+- **Notes**: "Keep going 15 minutes" for the caller only (never the partner). Allowed from 5 minutes before this person's end until 2 minutes after it, at most twice. Never counts toward the quota and never causes a strike. A double click counts once.
+- **Errors**: `400` not near the end, or no extensions left; `409` the request is already being processed
 
 ---
 
-### PATCH /api/v1/sessions/complete/:sessionId
+### POST /api/v1/sessions/:sessionId/solo
 
 - **Auth**: Required
-- **Params**: `sessionId`
-- **Body**: None
+- **Response**: `200 { data: SessionRoomResponse }`
+- **Notes**: Continue alone when the partner is late. Only from T+3 minutes, and only for someone who is in the room. The session becomes `ACTIVE` with `isSolo`; no quota use and no strike for this person. If the partner arrives later, it turns back into a normal session. The absent partner still gets the no-show strike at T+5.
+- **Errors**: `400` too early, or not in the room
+
+---
+
+### POST /api/v1/sessions/:sessionId/complete
+
+- **Auth**: Required. (Old path `PATCH /sessions/complete/:sessionId` still works.)
 - **Response**: `200 { data: { session, message: "Session completed" }, statusCode: 200 }`
-- **Notes**: Only `ACTIVE` sessions can be completed. Idempotent — already-completed sessions return the existing record. Cleans up Redis join-tracking key.
-- **Errors**: `400` session not in `ACTIVE` state, `401` not authenticated, `403` not a participant, `404` session not found
+- **Notes**: Only an `ACTIVE` session can be completed, and only once its time is up (one minute of margin). Idempotent. Leaving early does **not** end the session for the partner; the room closing is recorded from LiveKit's `room_finished` webhook.
+- **Errors**: `400` not active, or still running; `401`; `403`; `404`
 
 ---
 
-### GET /api/v1/sessions/status/:sessionId
+### GET | POST | PATCH | DELETE /api/v1/sessions/:sessionId/tasks[/:taskId]
 
 - **Auth**: Required
-- **Params**: `sessionId`
+- **Body** (POST): `{ text: string (1–120 chars) }`; (PATCH): `{ text?: string, done?: boolean }`
+- **Response**: `{ data: { tasks: SessionTaskDto[] } }` (GET), `201 { data: SessionTaskDto }` (POST), `200` (PATCH, DELETE)
+- **Notes**: Each person's own list, at most 10, plain text (all HTML removed). The partner can never see or change it (`404` for someone else's task).
+- **Errors**: `400` empty text or 10 tasks already, `403`, `404`
+
+---
+
+### POST /api/v1/sessions/:sessionId/report
+
+- **Auth**: Required
+- **Body**: `{ reason: ReportReason, description?: string (max 1000), chat?: [{ from, text, at }] (max 50) }`
+- **Response**: `201 { data: { success: true } }`
+- **Notes**: Report and leave, in one step: files the report with the last chat lines (chat is not stored anywhere else), blocks the partner in both directions, and ends the session (`COMPLETED`, `endedEarly`). It never gives the reported person a strike; an admin decides. All text is stored as plain text.
+- **Errors**: `400` no partner or invalid body, `403` not a participant, `404`, `409` already reported for this session
+
+---
+
+### PATCH /api/v1/sessions/join/:sessionId (deprecated)
+
+- **Auth**: Required + verified email
+- **Response**: `200 { data: { session, isActive } }`
+- **Notes**: Read-only now. Presence is written only from LiveKit webhooks, never from the browser. Removed when the new room screen ships.
+
+---
+
+### GET /api/v1/sessions/status/:sessionId (deprecated)
+
+- **Auth**: Required
 - **Response**: `200 { data: { session: { ...session, user1: {...}, user2: {...} } }, statusCode: 200 }`
-- **Errors**: `401` not authenticated, `403` not a participant, `404` session not found
+- **Notes**: Replaced by `GET /sessions/:sessionId`.
+- **Errors**: `401`, `403` not a participant, `404`
 
 ---
 
@@ -271,8 +312,8 @@ Favorites are matched first (see POST /bookings). Blocking someone removes any f
 - **Auth**: Required
 - **Body**: `{ sessionId: string (cuid), text: string (min 1, max 1000), rating?: number (1–5) }`
 - **Response**: `200 { data: { id, sessionId, userId, text, rating, createdAt }, statusCode: 200 }`
-- **Notes**: Session must be `COMPLETED`. Each user may only submit one reflection per session. Text is sanitized server-side via `sanitize-html`.
-- **Errors**: `400` missing fields, text too long, rating out of range, session not completed, `401` not authenticated, `403` not a participant, `404` session not found, `409` reflection already submitted
+- **Notes**: Allowed once the session has started (`ACTIVE` or `COMPLETED`). Each user may only submit one reflection per session. Text is sanitized server-side via `sanitize-html`.
+- **Errors**: `400` missing fields, text too long, rating out of range, session not started yet, `401` not authenticated, `403` not a participant, `404` session not found, `409` reflection already submitted
 
 ---
 
@@ -420,12 +461,20 @@ Favorites are matched first (see POST /bookings). Blocking someone removes any f
 
 ## WEBHOOKS
 
-> Webhook routes are **exempt** from the general API rate limiter (`generalLimiter` skips paths starting with `/api/webhooks`).  
-> Stripe webhook signature verification is applied before any payload processing.
+> Webhook routes need no login: the **signature is the authentication**. Nothing is read from the body before it is verified.
 
 ---
 
-> **Status**: Webhook endpoints are scaffolded for future Stripe integration. No active routes at this time.
+### POST /api/v1/webhooks/livekit
+
+- **Auth**: LiveKit signature (`Authorization` header: a JWT signed with `LIVEKIT_API_SECRET` that carries the sha256 of the body). The body is read raw (`application/webhook+json`).
+- **Events used**: `participant_joined` and `participant_left` (write who is in the room: `SessionParticipant`), `room_finished` (completes an `ACTIVE` session whose time is up). Both people having joined turns `CONFIRMED` into `ACTIVE`. Other events are ignored.
+- **Notes**: Safe to redeliver and to receive out of order: a late "left" of an old connection never marks someone absent after they rejoined. A participant who is not in that session is ignored.
+- **Response**: `200`; `401` for a missing, invalid or tampered signature (nothing changes).
+
+---
+
+> **Payments**: the payment-provider webhook (Paymob and a card provider, see `docs/SPEC.md` §8) will be added here later. Its signature verification must never be weakened.
 
 ---
 

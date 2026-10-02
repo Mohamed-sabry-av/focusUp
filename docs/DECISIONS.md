@@ -87,6 +87,22 @@ reminders, dashboard, admin panel and analytics events.
 | W3 | Closed beta | **Friday 20 November 2026.** No payments, invited users only (NTI + friends) |
 | W4 | Beta success | Checked mid-December: ≥ 80% of bookings get a partner · ≥ 95% of sessions connect video within 10 s · ≥ 40% of beta users book a 2nd session within 7 days |
 
+### Session room (3 Oct 2026)
+
+| # | Area | Decision |
+|---|---|---|
+| R1 | Presence | Who is in the room is written **only** from signature-verified LiveKit webhooks into Postgres (`SessionParticipant`). The Redis join set is gone, so the move to pg-boss does not depend on Redis for presence |
+| R2 | Delivery | Two PRs: PR C = backend (webhooks, token grants, lifecycle, no-show, rematch, solo, tasks, report); PR D = room screen |
+| R3 | Pre-join | A Focusmate-style screen before entering: camera preview, device pickers, camera on/off. The camera choice lives here, not in booking |
+| R4 | Quiet | Enforced by the token: a Quiet person gets no microphone source, whatever the browser does |
+| R5 | Keep going | "Keep going 15 min" is **per person**: the partner may leave at the normal end. At most twice, offered from 5 min before the end until 2 min after. Never counts toward quota or strikes |
+| R6 | Check-out | Tasks done + 1-5 rating + a short note. **No voice notes in the beta** (needs file storage); they move to v2 |
+| R7 | Re-match | At T+1 and T+2, two people who are each alone (in the room, partner absent) at the same start and duration, and not blocked, are paired. Their old sessions stay so the absent partners still get the T+5 strike; the new session is a normal one |
+| R8 | Solo | At T+3 a person who is in the room may continue alone: no quota, no strike for them. If the partner arrives later, it becomes a normal session again |
+| R9 | Ending | A session completes when its time is up (or when LiveKit reports the room closed after the end). Leaving early does not end it for the partner. **Report and leave** ends it for both, blocks both ways, and never strikes automatically |
+| R10 | Chat | Over the LiveKit data channel, not stored. The reporter's browser sends the last 50 lines with a report |
+| R11 | Report text | All report text (description and chat) is plain text; HTML is removed |
+
 ## Target architecture (one server)
 
 ```

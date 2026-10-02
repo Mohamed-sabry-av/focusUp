@@ -2,9 +2,11 @@ import { Queue } from "bullmq";
 import { noshowQueue } from "./noshow.queue";
 import { reminderQueue } from "./reminder.queue";
 import { expiryQueue } from "./expiry.queue";
+import { rematchQueue } from "./rematch.queue";
 
 const queueMap: Record<string, Queue> = {
   "session-noshow": noshowQueue,
+  "session-rematch": rematchQueue,
   "session-reminder": reminderQueue,
   "booking-expiry": expiryQueue,
 };
@@ -26,6 +28,29 @@ export async function scheduleNoshowCheck(
       backoff: { type: "exponential", delay: 5000 },
     },
   );
+}
+
+/** Re-match checks at T+1 and T+2 minutes: the late partner's person may be paired with another lonely person. */
+export const REMATCH_CHECK_MINUTES = [1, 2] as const;
+
+export function rematchJobId(sessionId: string, minute: number): string {
+  return `rematch-${minute}-${sessionId}`;
+}
+
+export async function scheduleRematchChecks(
+  sessionId: string,
+  scheduledAt: Date,
+): Promise<void> {
+  for (const minute of REMATCH_CHECK_MINUTES) {
+    const delay = scheduledAt.getTime() + minute * 60 * 1000 - Date.now();
+    if (delay <= 0) continue;
+
+    await rematchQueue.add(
+      "rematch-check",
+      { sessionId },
+      { jobId: rematchJobId(sessionId, minute), delay, attempts: 3, backoff: { type: "exponential", delay: 5000 } },
+    );
+  }
 }
 
 export async function scheduleReminders(

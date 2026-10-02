@@ -17,6 +17,8 @@ export default defineConfig({
       CORS_ORIGIN: "http://localhost:3001",
       BETTER_AUTH_SECRET: "test-secret-test-secret-test-secret-123",
       BETTER_AUTH_URL: "http://localhost:3000",
+      LIVEKIT_API_KEY: "testkey",
+      LIVEKIT_API_SECRET: "test-livekit-secret-test-livekit-secret",
     },
   },
 });

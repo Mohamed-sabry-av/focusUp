@@ -113,6 +113,15 @@ export class NotificationService {
     });
   }
 
+  /** Two people whose partners did not come were paired: the browser moves to the new room. */
+  static async notifyRematch(userId: string, newSessionId: string): Promise<void> {
+    await sendToUser(userId, "session:rematched", {
+      sessionId: newSessionId,
+      joinUrl: `/session/${newSessionId}`,
+      message: "We found you a new partner.",
+    });
+  }
+
   static async notifyBookingExpired(
     userId: string,
     slotTime: Date,

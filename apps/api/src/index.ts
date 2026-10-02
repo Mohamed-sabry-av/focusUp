@@ -7,6 +7,7 @@ import { initializeSocket } from "./lib/socket";
 import { noshowWorker } from "./workers/noshow.worker";
 import { reminderWorker } from "./workers/reminder.worker";
 import { expiryWorker } from "./workers/expiry.worker";
+import { rematchWorker } from "./workers/rematch.worker";
 
 const httpServer = createServer(app);
 const io = initializeSocket(httpServer);
@@ -15,7 +16,7 @@ httpServer.listen(env.PORT, () => {
   console.log(`API running on http://localhost:${env.PORT}`);
 });
 
-const workers = [noshowWorker, reminderWorker, expiryWorker];
+const workers = [noshowWorker, reminderWorker, expiryWorker, rematchWorker];
 
 async function gracefulShutdown(signal: string): Promise<void> {
   console.log(`Received ${signal}, shutting down gracefully...`);
