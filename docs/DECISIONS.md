@@ -6,8 +6,8 @@ Last updated: 2 October 2026 · From a grill session with the founder.
 
 | Document | Role |
 |---|---|
-| `FocusUp_SPEC_v1` (1 Oct 2026, Word) | Product truth: what to build and why |
-| **This file** | Overrides the spec wherever they differ. Newest wins |
+| `docs/SPEC.md` (v1.1, 2 Oct 2026) | Product truth: what to build and why. Already includes every decision below. `docs/FocusUp_SPEC_v1.1.docx` is the Word export of the same text |
+| **This file** | Why each v1.1 change was made. If the spec and this file ever disagree, the newest entry wins and the spec gets updated |
 | `AGENTS.md` | Code rules: how to build it |
 | `plan/prd-phase-*.json`, `tasks/phase0` | **Retired.** April task lists (Cal.com era, statuses never updated). Kept for history only |
 

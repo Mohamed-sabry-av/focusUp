@@ -6,7 +6,8 @@ This codebase will be maintained long-term. Treat every file as
 permanent. No throwaway code. No shortcuts that create tech debt.
 
 ## Source of Truth
-- **What to build**: `FocusUp_SPEC_v1` (product spec) + `docs/DECISIONS.md`, which overrides the spec where they differ
+- **What to build**: `docs/SPEC.md` (product spec v1.1; Word export in `docs/FocusUp_SPEC_v1.1.docx`)
+- **Why it was decided**: `docs/DECISIONS.md` — when a decision changes, update both files
 - **How to build it**: this file
 - `plan/prd-phase-*.json` and `tasks/phase0` are retired (April, Cal.com era) — do not implement from them
 
