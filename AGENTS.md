@@ -15,8 +15,8 @@ permanent. No throwaway code. No shortcuts that create tech debt.
 - **Frontend**: Next.js 16 (App Router), TailwindCSS v4, shadcn/ui (packages/ui), Zustand, TanStack React Query
 - **Backend**: Express 5 REST in `apps/api` — the only backend. Zod for validation
 - **Database**: PostgreSQL 17 via Prisma 7
-- **Cache/Queue**: Redis via BullMQ (AOF persistence, `noeviction`) + a 1-minute sweep that rebuilds missed jobs from the database
-- **Auth**: Better Auth — email/password + Google for the beta (phone OTP, Facebook later). httpOnly cookies
+- **Background jobs**: pg-boss (jobs stored in Postgres). No Redis — the BullMQ workers are being replaced
+- **Auth**: Better Auth — email/password + Google only. httpOnly cookies
 - **Video**: LiveKit (self-hosted Docker) — ws://localhost:7880 for development
 - **Realtime**: socket.io for app events; LiveKit data channel inside the session room
 - **Scheduling**: Custom-built slot-based booking system (no Cal.com dependency)
@@ -39,7 +39,8 @@ permanent. No throwaway code. No shortcuts that create tech debt.
 - Session room names = session.id (cuid) — never user IDs
 - WebSocket (socket.io) for: match notifications, rematch events, in-app notifications
 - REST for: everything else
-- Every scheduled job must be idempotent and recoverable by the sweep
+- Every job handler re-checks database state before acting (idempotent) — jobs are queued outside the Prisma transaction
+- A reconcile step re-creates missing jobs at worker startup and every 15 minutes
 
 ## Code Style
 - TypeScript strict mode everywhere
@@ -74,7 +75,7 @@ permanent. No throwaway code. No shortcuts that create tech debt.
 
 ## What You Must NEVER Change
 - Prisma schema enums (SessionStatus, PlanTier) without explicit instruction
-- LiveKit room config preset: 960×540 @ 24 fps, max ~600 kbps, VP8 + simulcast, adaptiveStream + dynacast
+- LiveKit video config: VP8 simulcast (3 layers up to 720p), adaptiveStream + dynacast; "Data saver" caps at 360p
 - Payment webhook signature verification logic
 - Auth expiry values: 15 min (session re-validation / cookie cache) and 7 days (session lifetime)
 

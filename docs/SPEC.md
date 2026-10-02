@@ -9,10 +9,10 @@ Items changed in v1.1 are marked **[v1.1]**. The reasons are logged in `docs/DEC
 - **What:** A web app where people book a 1:1 virtual co-working session (25 / 50 / 75 min) with a partner, so both actually start and finish their work. Body doubling, with the Focusmate experience.
 - **For whom:** university students, high-school students, freelancers and remote employees in the Arab world. Entry channels: NTI, ITIDA, university groups, freelancer communities, social content.
 - **Why us vs Focusmate:** cheaper with local payment, a more generous free tier (6 sessions/week), camera optional (unlike Focusmate), optional same-gender matching, a "hide my photo" privacy option, built for Arab users (Arabic in v2).
-- **MVP shape:** web only, English UI, scheduled booking only, 1:1 only. **[v1.1]** Built on the existing focusUp repo: Next.js 16 + Express REST (`apps/api`) + Prisma + PostgreSQL 17 + Redis/BullMQ + self-hosted LiveKit, all on one server with one domain.
+- **MVP shape:** web only, English UI, scheduled booking only, 1:1 only. **[v1.1]** Built on the existing focusUp repo: Next.js 16 + Express REST (`apps/api`) + Prisma + PostgreSQL 17 + self-hosted LiveKit, all on one server with one domain. No Redis.
 - **Success at 3 months after launch:** 100 weekly active users (WAU = users who completed ≥ 1 session that week).
 - **Owner & capacity:** solo founder, 20+ hours/week, infra budget < $50/month.
-- **Timeline [v1.1]:** closed beta (no payments) on **Friday 20 November 2026**. Payments, extra sign-in methods and hardening follow; public launch date decided after the mid-December beta review.
+- **Timeline [v1.1]:** closed beta (no payments) on **Friday 20 November 2026**. Payments and hardening follow; public launch date decided after the mid-December beta review.
 
 Legend used in this doc:
 
@@ -45,7 +45,7 @@ Legend used in this doc:
 | 17 | Matching extras | Optional same-gender; favorites first | [D] |
 | 18 | No partner found | **[v1.1]** At T-10 drop same-gender for "flexible" bookings → rematch offered at T+1 → solo session at T+3 (no quota, no strike) | [D] |
 | 19 | Strikes | Lighter policy: 5 strikes in 30 days → 3-day suspension | [D] |
-| 20 | Sign-up | **[v1.1]** Beta: email + password and Google. Phone (OTP) and Facebook added before public launch | [D] |
+| 20 | Sign-up | **[v1.1]** Email + password and Google only. No phone (OTP) or Facebook sign-in | [D] |
 | 21 | Onboarding | Name + photo only | [D] |
 | 22 | Reports | Manual admin review + auto-suspend on threshold + user block | [D] |
 | 23 | Minors | Allowed with no special restrictions. Accepted risk, see §12 | [D] |
@@ -63,10 +63,10 @@ Legend used in this doc:
 | 35 | Spec format | English, Word + Markdown | [D] |
 | 36 | Calendar visibility | **[v1.1]** Booked slots show other users' first name + photo. "Hide my photo" setting shows initials instead | [D] |
 | 37 | Match timing | **[v1.1]** A match locks at booking. The partner changes only on cancel or no-show | [D] |
-| 38 | Video quality | **[v1.1]** 960×540 @ 24 fps, max ~600 kbps, VP8 with simulcast | [D] |
+| 38 | Video quality | **[v1.1]** Dynamic: adapts to each connection, up to 720p. "Data saver" setting caps it at 360p | [D] |
 | 39 | Backend shape | **[v1.1]** One REST backend (`apps/api`). oRPC scaffold removed | [D] |
 | 40 | Auth library | **[v1.1]** Better Auth, migrated before other features | [D] |
-| 41 | Background jobs | **[v1.1]** Redis + BullMQ with a 1-minute recovery sweep (replaces pg-boss) | [D] |
+| 41 | Background jobs | **[v1.1]** pg-boss (job queue stored in Postgres). No Redis. A reconcile step re-creates any missing job at startup and every 15 minutes | [D] |
 | 42 | Realtime | **[v1.1]** socket.io + Web Push (replaces polling) | [D] |
 | 43 | Backups | **[v1.1]** Not now. Revisit before beta invites | [OPEN] |
 | 44 | Closed beta | **[v1.1]** Friday 20 November 2026, no payments | [D] |
@@ -89,6 +89,7 @@ Legend used in this doc:
 - **[v1.1]** As a user, I see who is already booked on the calendar, so I pick times where I'll get a partner.
 - **[v1.1]** As a user, I choose camera on/off and Quiet mode, so I'm matched with people who chose the same when possible, and my partner sees a badge when our choices differ.
 - **[v1.1]** As a user, I can hide my photo from the calendar and show initials instead.
+- **[v1.1]** As a user on mobile data, I turn on Data saver so sessions use less data.
 - As a user, I join the room, write my goal, optionally say hi, work, then mark what I finished.
 - As a user, if my partner doesn't show, I'm rematched or I continue solo, and I'm not punished.
 - As a user, I add a good partner to favorites and get matched with them first next time.
@@ -104,7 +105,6 @@ Legend used in this doc:
 | Feature | Closed beta (20 Nov) | Public launch |
 |---|---|---|
 | Sign-up/login: email + password (with email verification), Google | Yes | Yes |
-| Sign-up/login: phone OTP, Facebook | No | Yes |
 | Onboarding: display name + photo; timezone auto-detected from the browser | Yes | Yes |
 | Booking calendar: 14 days, 15-minute start slots, 25/50/75 min, booked people shown | Yes | Yes |
 | Booking options: camera on/off, Quiet, Desk/Walk, same-gender (optional), "flexible" | Yes | Yes |
@@ -157,7 +157,7 @@ Legend used in this doc:
 | Feature | Rule |
 |---|---|
 | Video | Per booking: camera on/off. Camera-off users show avatar + name. **[v1.1]** When choices differ, the camera-on partner sees a "Camera off" badge |
-| Video quality | **[v1.1]** 960×540 @ 24 fps, max ~600 kbps, VP8 with simulcast, adaptive stream + dynacast. About 450 MB per 50-min session (send + receive) |
+| Video quality | **[v1.1]** Dynamic. Each user sends 3 simulcast layers (about 180p / 360p / 720p). LiveKit gives the partner the layer their connection can handle and switches live (adaptive stream); layers nobody watches stop being encoded (dynacast). "Data saver" caps the user's video at 360p, about a quarter of the data of full HD (which can reach ~1.3 GB per 50-min session, send + receive). VP8 for the widest device support [A] |
 | Mic | Optional; Quiet users cannot unmute. **[v1.1]** Partner of a Quiet user sees a "Quiet mode" badge |
 | Text chat | LiveKit data channel. [A] Not stored after the session (privacy); last 50 messages attached to a report if one is filed |
 | Screen share | Opt-in per session, never auto-start |
@@ -243,7 +243,7 @@ With camera and Quiet as soft preferences, each start time has only 3 pools (one
 ### 6.3 Identity
 
 - Email verification required before the first session (email sign-ups).
-- **[v1.1]** Phone OTP arrives before public launch; [R] later make it required for users with reports.
+- **[v1.1]** No phone or Facebook sign-in. Accounts are email + password (verified) or Google.
 
 ### 6.4 Privacy [v1.1]
 
@@ -263,7 +263,7 @@ With camera and Quiet as soft preferences, each start time has only 3 pools (one
 
 ### 7.2 Settings
 
-Name, photo, **[v1.1]** hide my photo, timezone, notification preferences, linked login methods, subscription & billing, data export, account deletion.
+Name, photo, **[v1.1]** hide my photo, **[v1.1]** Data saver, timezone, notification preferences, linked login methods, subscription & billing, data export, account deletion.
 
 ## 8. Monetization
 
@@ -285,9 +285,9 @@ Name, photo, **[v1.1]** hide my photo, timezone, notification preferences, linke
 |---|---|---|
 | Web | Next.js 16 (App Router), Tailwind v4, shadcn/ui | `apps/web`, served with `next start` |
 | API | Express 5 REST | `apps/api` is the only backend. Zod request and response schemas in `packages/shared-types` |
-| Background jobs | Redis 7 + BullMQ | Separate worker container from the same image. AOF persistence, `noeviction`, 1-minute recovery sweep |
+| Background jobs | pg-boss | Separate worker container from the same image. Jobs live in Postgres (own `pgboss` schema) with retries, backoff and schedules built in. Reconcile at startup + every 15 min |
 | Database | PostgreSQL 17 + Prisma 7 | Migrations only, never `db push` |
-| Auth | Better Auth | Email/password + Google (beta); phone-number and Facebook plugins before launch. httpOnly cookies |
+| Auth | Better Auth | Email/password + Google only. httpOnly cookies |
 | Realtime | socket.io | Match, rematch and in-app notifications |
 | Video | LiveKit, self-hosted | Own Compose project so app deploys never restart it. TURN/TLS on port 443 |
 | Email | Resend | Confirmation, reminders, .ics attachment |
@@ -296,18 +296,18 @@ Name, photo, **[v1.1]** hide my photo, timezone, notification preferences, linke
 | Analytics | [R] PostHog (free tier) | |
 | Errors | [R] Sentry (free tier) | |
 
-Removed from v1: Vercel, Railway, Supabase, LiveKit Cloud, pg-boss, polling-only realtime. Removed earlier: Cal.com, Stripe. Removed from the repo: the oRPC scaffold (`apps/server`, `packages/api`) and the empty `packages/db`.
+Removed from v1: Vercel, Railway, Supabase, LiveKit Cloud, polling-only realtime (pg-boss is kept). Removed earlier: Cal.com, Stripe. To be removed from the repo: Redis and BullMQ (the current workers in `apps/api/src/queues` and `apps/api/src/workers` are replaced by pg-boss in week 6). Removed from the repo: the oRPC scaffold (`apps/server`, `packages/api`) and the empty `packages/db`.
 
 ### 9.2 Deployment (one server)
 
 ```
 example.com            → Caddy (TLS) → Next.js (apps/web)
 example.com/api/*      → Caddy       → apps/api (REST, Better Auth, socket.io)
-                                       worker container (BullMQ workers + sweep)
+                                       worker container (pg-boss workers)
 rtc.example.com        → Caddy       → LiveKit signaling (WSS)
 turn.example.com:443   → Caddy layer4 (SNI) → LiveKit TURN/TLS
 UDP + TCP 7881         → LiveKit media (direct)
-Postgres 17, Redis 7   → internal network only
+Postgres 17            → internal network only
 ```
 
 - The API sits under the same origin (`/api`) to avoid CORS and cross-site cookie problems.
@@ -320,23 +320,26 @@ Postgres 17, Redis 7   → internal network only
 - When the tab is closed: Web Push + email.
 - Inside the session, LiveKit handles media, presence and chat (data channel). LiveKit webhooks record joins and leaves on the server.
 
-### 9.4 Background jobs (BullMQ)
+### 9.4 Background jobs (pg-boss) [v1.1]
 
-| Job | Trigger |
-|---|---|
-| reminder | T-24h, T-1h, T-10m per booking |
-| relax-match | T-10m for unmatched flexible bookings with same-gender on |
-| rematch | **[v1.1]** T+1m |
-| solo-offer | **[v1.1]** T+3m |
-| no-show-check | T+5m: mark absent user NO_SHOW, add strike |
-| suspension-check | After each new strike/report |
-| session-close | End + 2 min |
-| sweep | **[v1.1]** Every minute: rebuild any missing job from the database. Every job is idempotent |
+Jobs are stored in Postgres, so they survive restarts and are included in database backups. They are queued right after the booking is saved, outside the Prisma transaction (no raw SQL), so every handler re-checks the booking before acting, and a reconcile step covers a crash between the two.
+
+| Job | Trigger | Idempotency |
+|---|---|---|
+| reminder | T-24h, T-1h, T-10m per booking | Singleton key per booking + reminder; skipped if booking cancelled |
+| relax-match | T-10m for unmatched flexible bookings with same-gender on | Skipped if already matched or `Booking.relaxedAt` set |
+| no-show-check | T+5m: mark absent user NO_SHOW, add strike | Skipped unless booking is still MATCHED with no join |
+| session-close | End + 2 min | Skipped if session already COMPLETED |
+| send-email / send-push | Queued by the jobs above and by app events | pg-boss retries with backoff; failures stay visible |
+| reconcile | Worker startup + every 15 min | Re-creates missing jobs for future bookings |
+
+- **Rematch (T+1) and solo offer (T+3)** are triggered from the waiting user's room screen; the server checks the partner's presence from LiveKit webhooks before acting.
+- **Suspension check** runs inline right after each new strike or report, not on a timer.
 
 ### 9.5 LiveKit rules
 
 - Tokens generated server-side only, 2-hour TTL, in-memory on the client.
-- Room name = session id. adaptiveStream and dynacast on.
+- Room name = session id. Simulcast (3 layers, up to 720p), adaptiveStream and dynacast on. Data saver caps the publisher at the 360p layer.
 - Camera-off and Quiet enforced in the token's permissions (no camera / no microphone source).
 - **[v1.1]** Webhooks are signature-verified and are the source of truth for join/leave.
 
@@ -345,11 +348,11 @@ Postgres 17, Redis 7   → internal network only
 ```prisma
 model User {
   id             String     @id @default(cuid())
-  email          String?    @unique
-  phone          String?    @unique
+  email          String     @unique          // [v1.1] no phone sign-in
   name           String
   imageUrl       String?
   hidePhoto      Boolean    @default(false)  // [v1.1]
+  dataSaver      Boolean    @default(false)  // [v1.1] caps video at 360p
   timezone       String     @default("UTC")
   gender         Gender?                     // asked only when same-gender is used
   role           Role       @default(USER)   // USER / ADMIN
@@ -376,6 +379,7 @@ model Booking {             // one row per user per requested slot
   joinedAt      DateTime?
   leftAt        DateTime?
   countsToQuota Boolean       @default(true)
+  relaxedAt     DateTime?     // [v1.1] T-10 relax done
   createdAt     DateTime      @default(now())
 
   @@index([startAt, durationMin, status])
@@ -401,7 +405,7 @@ model Notification     { id String @id @default(cuid()); userId String; type Str
 model PushSubscription { id String @id @default(cuid()); userId String; endpoint String @unique; keys Json }
 ```
 
-Better Auth adds its own account, session and verification tables.
+Better Auth adds its own account, session and verification tables. pg-boss keeps its jobs in its own `pgboss` schema, outside Prisma's migrations.
 
 **[v1.1] Note on the current schema:** `apps/api/prisma/schema.prisma` today uses `BookingRequest` + `Session` (user1/user2) and has no migrations yet. Moving to the model above happens in weeks 2–3 through new migrations. The `SessionStatus` and `PlanTier` enums may only change with the founder's explicit approval (AGENTS.md) [OPEN].
 
@@ -439,7 +443,7 @@ Checked in mid-December 2026:
 | **[v1.1]** One server, no backups yet | Outage or data loss affects everyone | Decide backups before beta invites. Uptime monitor |
 | Low liquidity (no partners at odd hours) | Users churn | v1.1 cuts pools from 12 to 3 per start time; calendar shows booked people; rematch + solo fallback; beta invites focused on peak hours |
 | Same-gender requests split pools | Lower match rate for those users | Monitor match rate per combination; T-10 relax for flexible bookings |
-| **[v1.1]** Server bandwidth | Video traffic exceeds the plan's allowance | ~450 MB per 50-min session at the v1.1 preset; pick a plan with large included traffic |
+| **[v1.1]** Server bandwidth | Video traffic exceeds the plan's allowance | Up to ~1.3 GB per 50-min HD session (less on weak connections or with Data saver); pick a plan with large included traffic |
 | Harassment / inappropriate behavior | Safety | Instant report + block, auto-suspend, manual review |
 | **[v1.1]** Screen share with strangers | Private info leaks or inappropriate content | Opt-in only, never auto-start, covered by report |
 | Payments from Egypt | Can't use Stripe | Paymob + merchant-of-record provider evaluation |
@@ -452,10 +456,10 @@ Checked in mid-December 2026:
 |---|---|---|---|
 | 1 | 5–9 Oct | Cleanup + auth | One backend, baseline migration, shared API contracts, type checks for api + web. Better Auth: email + Google, verification and reset through Resend |
 | 2–3 | 12–23 Oct | Booking + matching v2 | New schema (preferences, Favorite, Strike, SessionTask, Notification, PushSubscription), matching per §5, calendar with booked people |
-| 4–5 | 26 Oct–6 Nov | Session room | Video preset, goal/check-out, chat, tasks, screen share, report & block, LiveKit webhooks, reconnect, rematch T+1 / solo T+3 |
-| 6 | 9–13 Nov | Jobs + notifications + server | Reminders (email + .ics + push), T-10 relax, no-show T+5, strikes, sweep. Server and domain live |
+| 4–5 | 26 Oct–6 Nov | Session room | Dynamic video + Data saver, goal/check-out, chat, tasks, screen share, report & block, LiveKit webhooks, reconnect, rematch T+1 / solo T+3 |
+| 6 | 9–13 Nov | Jobs + notifications + server | pg-boss replaces BullMQ (Redis removed). Reminders (email + .ics + push), T-10 relax, no-show T+5, strikes. Server and domain live |
 | 7 | 16–20 Nov | Dashboard + admin → beta | Stats, streak, history, admin reports queue, analytics events, network tests. **Closed beta Friday 20 Nov** |
-| After beta | From 23 Nov | Launch work | Payments (card + Paymob) and quota enforcement, phone OTP + Facebook, fixes from beta, legal review. Public launch date set after the mid-December review |
+| After beta | From 23 Nov | Launch work | Payments (card + Paymob) and quota enforcement, fixes from beta, legal review. Public launch date set after the mid-December review |
 
 ## 14. Open questions
 
@@ -468,6 +472,7 @@ Checked in mid-December 2026:
 | International card provider (Paymob international vs Paddle/Lemon Squeezy vs other) | Before payments work |
 | Desk/Walk: soft preference or hard filter? (assumed soft) | Week 2 |
 | SessionStatus / PlanTier enum changes for the new data model | Week 2 |
+| **[v1.1]** Confirm pg-boss runs under Bun; otherwise run the worker container on Node | Week 6 |
 | Minors policy | Before partnerships, app stores, public launch |
 | What exactly NTI / ITIDA provide in the partnership (users, funding, branding) and what they get | Before beta invites |
 | Chat retention: keep "not stored" or store for X days for safety? | Before beta |
@@ -479,4 +484,4 @@ Checked in mid-December 2026:
 | Version | Date | Changes |
 |---|---|---|
 | 1.0 | 1 Oct 2026 | First spec from the founder's grill session |
-| 1.1 | 2 Oct 2026 | Focusmate experience (camera and Quiet as soft preferences with badges, booked people on calendar, lock at booking, rematch T+1 / solo T+3); beta sign-in = email + Google; one-server hosting; REST-only backend, Better Auth, Redis/BullMQ, socket.io; video preset; beta date and success criteria. Details in `docs/DECISIONS.md` |
+| 1.1 | 2 Oct 2026 | Focusmate experience (camera and Quiet as soft preferences with badges, booked people on calendar, lock at booking, rematch T+1 / solo T+3); sign-in = email + Google only; one-server hosting; REST-only backend, Better Auth, pg-boss (no Redis), socket.io; dynamic video up to 720p with Data saver; beta date and success criteria. Details in `docs/DECISIONS.md` |

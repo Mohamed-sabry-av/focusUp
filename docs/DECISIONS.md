@@ -29,7 +29,7 @@ reminders, dashboard, admin panel and analytics events.
 | P6 | Match timing | A match locks at booking. The partner only changes if they cancel or no-show. T-10 relax for "flexible" bookings now only drops same-gender | Spec §5.3 |
 | P7 | No-show | Rematch offered at T+1 min. Solo session offered at T+3 (no quota, no strike). Absent user marked NO_SHOW + 1 strike at T+5 | Spec §5.3–5.4 |
 | P8 | Room tools (v1) | Goal + check-out (tasks done, 1–5 rating), report & block, text chat (LiveKit data channel), task list (≤ 10), screen share (opt-in, never auto-start) | — |
-| P9 | Sign-in (beta) | Email + password (verified) and Google. Phone OTP and Facebook after the beta | Spec #20 for beta |
+| P9 | Sign-in | Email + password (verified) and Google only. No phone OTP or Facebook, not even after the beta | Spec #20 |
 | P10 | Minors | No age restriction (founder's decision). **Accepted risk**, see Risks | — |
 
 ### Technical
@@ -40,10 +40,10 @@ reminders, dashboard, admin panel and analytics events.
 | T2 | Backend | One REST backend: `apps/api` (controller → service → repository). Delete `apps/server`, `packages/api` (oRPC wrapper) and `packages/db` (empty scaffold) | Better-T-Stack scaffold |
 | T3 | API contracts | All Zod input **and** response schemas live in `packages/shared-types`. Web calls the API through one typed fetch helper, no hand-written types in hooks | — |
 | T4 | Auth | Migrate to Better Auth now, before other features. Remove the custom JWT code (it has a hard-coded fallback secret, and verification emails are never sent) | Current code |
-| T5 | Jobs | Keep Redis + BullMQ. Redis runs with AOF persistence and `maxmemory-policy noeviction`. A sweep every minute rebuilds any missed reminder / rematch / no-show job from the database | Spec §9.1 (pg-boss) |
+| T5 | Jobs | pg-boss: jobs stored in Postgres (own `pgboss` schema), retries, backoff and schedules built in. Jobs are queued right after the booking is saved, outside the Prisma transaction (no raw SQL), so every handler re-checks booking state and a reconcile step re-creates missing jobs at worker startup and every 15 minutes. Redis and BullMQ are removed when the workers are rewritten in week 6. Compared on 2 Oct against keeping BullMQ and a custom Postgres scheduler: pg-boss needs no extra service and less of our own code | BullMQ code (matches spec v1 §9.1) |
 | T6 | Realtime | Keep socket.io for match, rematch and in-app notifications. Email + Web Push when the tab is closed | Spec §9.2 (polling) |
 | T7 | Join/leave truth | LiveKit webhooks (signature-verified) record who joined and left. No-show and strike logic uses them, never the browser's word | — |
-| T8 | Video preset | 960×540 @ 24 fps, max ~600 kbps, VP8 with simulcast, `adaptiveStream` + `dynacast` on. About 450 MB per 50-min session (send + receive) | Old preset: 540p30, 1.5 Mbps, VP9 |
+| T8 | Video quality | Dynamic: VP8 simulcast with 3 layers (about 180p / 360p / 720p), `adaptiveStream` + `dynacast` on, so each partner gets what their connection can handle. "Data saver" user setting caps the user's video at 360p. Full HD both ways can reach ~1.3 GB per 50-min session | Old preset: 540p30, 1.5 Mbps, VP9 |
 | T9 | Payments | Paymob (Egypt) + an international card provider (TBD). Never Stripe (it doesn't support Egypt-based merchants). Built after the beta | AGENTS.md (Stripe) |
 | T10 | Database | Create a baseline Prisma migration from the current schema. `db push` is not allowed from then on | — |
 | T11 | Backups | Not now. **Revisit before beta invites go out** | — |
@@ -62,11 +62,11 @@ reminders, dashboard, admin panel and analytics events.
 ```
 example.com           → Caddy (TLS) → Next.js (apps/web)
 example.com/api/*     → Caddy       → apps/api (REST, Better Auth, socket.io)
-                                      worker container (same image, BullMQ workers + sweep)
+                                      worker container (same image, pg-boss workers)
 rtc.example.com       → Caddy       → LiveKit signaling (WSS)
 turn.example.com:443  → Caddy layer4 (SNI routing) → LiveKit TURN/TLS
 UDP + TCP 7881        → LiveKit media (direct)
-Postgres 17, Redis 7  → internal network only
+Postgres 17           → internal network only (no Redis)
 ```
 
 Serving the API under the same origin (`/api`) avoids CORS and cross-site cookie problems for
@@ -80,8 +80,8 @@ cut live sessions. `infrastructure/livekit/livekit.yaml` must move from the dev 
 |---|---|---|
 | 1 | 5–9 Oct | Cleanup: one backend, delete scaffolds, ignore the `livekit/` and `meet/` reference clones, baseline migration, shared contracts. Better Auth (email + Google, verification and reset through Resend) |
 | 2–3 | 12–23 Oct | Schema for the new rules (booking preferences, Favorite, Strike, SessionTask, Notification, PushSubscription). Matching v2 (P4–P6). Calendar showing people (P2) |
-| 4–5 | 26 Oct–6 Nov | Session room: video preset, goal/check-out, chat, tasks, screen share, report & block, LiveKit webhooks, reconnect, rematch T+1 / solo T+3 |
-| 6 | 9–13 Nov | Jobs + notifications: reminders (email + .ics + push), T-10 relax, no-show at T+5, strikes, sweep. Server + domain live |
+| 4–5 | 26 Oct–6 Nov | Session room: dynamic video + Data saver, goal/check-out, chat, tasks, screen share, report & block, LiveKit webhooks, reconnect, rematch T+1 / solo T+3 |
+| 6 | 9–13 Nov | Jobs + notifications: pg-boss replaces BullMQ (Redis removed); reminders (email + .ics + push), T-10 relax, no-show at T+5, strikes, reconcile. Server + domain live |
 | 7 | 16–20 Nov | Dashboard (stats, streak, history), admin reports queue, analytics events, connection tests on Egyptian networks → **beta Fri 20 Nov** |
 
 ## Open questions
