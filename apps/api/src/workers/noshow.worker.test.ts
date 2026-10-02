@@ -22,43 +22,51 @@ vi.mock("bullmq", () => ({
 vi.mock("../queues/connection", () => ({ connection: {} }));
 
 // ── Prisma ──────────────────────────────────────────────────────────────────
-const mockPrisma = {
-  session: {
-    findUnique: vi.fn(),
-    update: vi.fn(),
+const {
+  mockPrisma,
+  mockRedis,
+  mockNotificationService,
+  mockEmailService,
+  mockRemoveJob,
+} = vi.hoisted(() => ({
+  mockPrisma: {
+    session: {
+      findUnique: vi.fn(),
+      update: vi.fn(),
+    },
+    user: {
+      update: vi.fn(),
+    },
   },
-  user: {
-    update: vi.fn(),
+  mockRedis: {
+    smembers: vi.fn(),
   },
-};
+  mockNotificationService: {
+    notifyNoShow: vi.fn(),
+  },
+  mockEmailService: {
+    sendStrikeWarning: vi.fn(),
+    sendBanNotification: vi.fn(),
+    sendPartnerNoShowNotification: vi.fn(),
+  },
+  mockRemoveJob: vi.fn(),
+}));
 vi.mock("../lib/prisma", () => ({ prisma: mockPrisma }));
 
 // ── Redis ───────────────────────────────────────────────────────────────────
-const mockRedis = {
-  smembers: vi.fn(),
-};
 vi.mock("../lib/redis", () => ({ redis: mockRedis }));
 
 // ── NotificationService ─────────────────────────────────────────────────────
-const mockNotificationService = {
-  notifyNoShow: vi.fn(),
-};
 vi.mock("../services/notification.service", () => ({
   NotificationService: mockNotificationService,
 }));
 
 // ── EmailService ────────────────────────────────────────────────────────────
-const mockEmailService = {
-  sendStrikeWarning: vi.fn(),
-  sendBanNotification: vi.fn(),
-  sendPartnerNoShowNotification: vi.fn(),
-};
 vi.mock("../services/email.service", () => ({
   EmailService: mockEmailService,
 }));
 
 // ── Queue helpers ───────────────────────────────────────────────────────────
-const mockRemoveJob = vi.fn();
 vi.mock("../queues/helpers", () => ({
   removeJob: mockRemoveJob,
   scheduleNoshowCheck: vi.fn(),
@@ -167,7 +175,10 @@ describe("processNoshowJob", () => {
     mockPrisma.session.findUnique.mockResolvedValue(makeSession());
     mockRedis.smembers.mockResolvedValue([]);
     mockPrisma.session.update.mockResolvedValue(undefined);
-    mockPrisma.user.update.mockResolvedValue({ strikeCount: 1, isBanned: false });
+    mockPrisma.user.update.mockResolvedValue({
+      strikeCount: 1,
+      isBanned: false,
+    });
 
     await processNoshowJob(makeJob({ sessionId: "sess-001" }));
 
@@ -183,7 +194,10 @@ describe("processNoshowJob", () => {
     mockRedis.smembers.mockResolvedValue([]);
     mockPrisma.session.update.mockResolvedValue(undefined);
     // Both users absent — two separate increment calls expected
-    mockPrisma.user.update.mockResolvedValue({ strikeCount: 1, isBanned: false });
+    mockPrisma.user.update.mockResolvedValue({
+      strikeCount: 1,
+      isBanned: false,
+    });
 
     await processNoshowJob(makeJob({ sessionId: "sess-001" }));
 
@@ -222,7 +236,10 @@ describe("processNoshowJob", () => {
     mockPrisma.session.findUnique.mockResolvedValue(makeSession());
     mockRedis.smembers.mockResolvedValue([]);
     mockPrisma.session.update.mockResolvedValue(undefined);
-    mockPrisma.user.update.mockResolvedValue({ strikeCount: 2, isBanned: false });
+    mockPrisma.user.update.mockResolvedValue({
+      strikeCount: 2,
+      isBanned: false,
+    });
 
     await processNoshowJob(makeJob({ sessionId: "sess-001" }));
 
@@ -236,7 +253,7 @@ describe("processNoshowJob", () => {
     mockPrisma.session.update.mockResolvedValue(undefined);
     mockPrisma.user.update
       .mockResolvedValueOnce({ strikeCount: 5, isBanned: false }) // user-1 increment → triggers ban
-      .mockResolvedValueOnce({ strikeCount: 5, isBanned: true })  // user-1 isBanned: true update
+      .mockResolvedValueOnce({ strikeCount: 5, isBanned: true }) // user-1 isBanned: true update
       .mockResolvedValueOnce({ strikeCount: 1, isBanned: false }); // user-2 increment
 
     await processNoshowJob(makeJob({ sessionId: "sess-001" }));
@@ -256,7 +273,10 @@ describe("processNoshowJob", () => {
     mockPrisma.session.findUnique.mockResolvedValue(makeSession());
     mockRedis.smembers.mockResolvedValue([]);
     mockPrisma.session.update.mockResolvedValue(undefined);
-    mockPrisma.user.update.mockResolvedValue({ strikeCount: 1, isBanned: false });
+    mockPrisma.user.update.mockResolvedValue({
+      strikeCount: 1,
+      isBanned: false,
+    });
 
     await processNoshowJob(makeJob({ sessionId: "sess-001" }));
 
@@ -274,7 +294,10 @@ describe("processNoshowJob", () => {
     mockRedis.smembers.mockResolvedValue(["user-1"]);
     mockPrisma.session.update.mockResolvedValue(undefined);
     // Only user-2 gets a strike increment
-    mockPrisma.user.update.mockResolvedValue({ strikeCount: 1, isBanned: false });
+    mockPrisma.user.update.mockResolvedValue({
+      strikeCount: 1,
+      isBanned: false,
+    });
     mockNotificationService.notifyNoShow.mockResolvedValue(undefined);
     mockEmailService.sendPartnerNoShowNotification.mockResolvedValue(undefined);
 
@@ -285,11 +308,15 @@ describe("processNoshowJob", () => {
       expect.objectContaining({ id: "sess-001" }),
       "user-1",
     );
-    expect(mockEmailService.sendPartnerNoShowNotification).toHaveBeenCalledTimes(1);
-    expect(mockEmailService.sendPartnerNoShowNotification).toHaveBeenCalledWith({
-      to: "u1@test.com",
-      sessionId: "sess-001",
-    });
+    expect(
+      mockEmailService.sendPartnerNoShowNotification,
+    ).toHaveBeenCalledTimes(1);
+    expect(mockEmailService.sendPartnerNoShowNotification).toHaveBeenCalledWith(
+      {
+        to: "u1@test.com",
+        sessionId: "sess-001",
+      },
+    );
   });
 
   // ── 11. Reminder jobs cleaned up ─────────────────────────────────────────
@@ -297,7 +324,10 @@ describe("processNoshowJob", () => {
     mockPrisma.session.findUnique.mockResolvedValue(makeSession());
     mockRedis.smembers.mockResolvedValue([]);
     mockPrisma.session.update.mockResolvedValue(undefined);
-    mockPrisma.user.update.mockResolvedValue({ strikeCount: 1, isBanned: false });
+    mockPrisma.user.update.mockResolvedValue({
+      strikeCount: 1,
+      isBanned: false,
+    });
     mockRemoveJob.mockResolvedValue(undefined);
 
     await processNoshowJob(makeJob({ sessionId: "sess-001" }));
@@ -317,11 +347,16 @@ describe("processNoshowJob", () => {
     mockPrisma.session.findUnique.mockResolvedValue(makeSession());
     mockRedis.smembers.mockResolvedValue([]);
     mockPrisma.session.update.mockResolvedValue(undefined);
-    mockPrisma.user.update.mockResolvedValue({ strikeCount: 1, isBanned: false });
+    mockPrisma.user.update.mockResolvedValue({
+      strikeCount: 1,
+      isBanned: false,
+    });
 
     await processNoshowJob(makeJob({ sessionId: "sess-001" }));
 
     expect(mockNotificationService.notifyNoShow).not.toHaveBeenCalled();
-    expect(mockEmailService.sendPartnerNoShowNotification).not.toHaveBeenCalled();
+    expect(
+      mockEmailService.sendPartnerNoShowNotification,
+    ).not.toHaveBeenCalled();
   });
 });

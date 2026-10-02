@@ -1,65 +1,75 @@
-import { z } from 'zod';
+import { z } from "zod";
 
 // ENUMS
 export enum SessionStatus {
-  PENDING = 'PENDING',
-  CONFIRMED = 'CONFIRMED',
-  ACTIVE = 'ACTIVE',
-  COMPLETED = 'COMPLETED',
-  CANCELLED = 'CANCELLED',
-  NO_SHOW = 'NO_SHOW'
+  PENDING = "PENDING",
+  CONFIRMED = "CONFIRMED",
+  ACTIVE = "ACTIVE",
+  COMPLETED = "COMPLETED",
+  CANCELLED = "CANCELLED",
+  NO_SHOW = "NO_SHOW",
 }
 
 export enum PlanTier {
-  FREE = 'FREE',
-  PRO = 'PRO',
-  TEAM = 'TEAM'
+  FREE = "FREE",
+  PRO = "PRO",
+  TEAM = "TEAM",
 }
 
 export enum Category {
-  CODING = 'CODING',
-  WRITING = 'WRITING',
-  STUDYING = 'STUDYING',
-  DESIGN = 'DESIGN',
-  ADMIN = 'ADMIN',
-  OTHER = 'OTHER'
+  CODING = "CODING",
+  WRITING = "WRITING",
+  STUDYING = "STUDYING",
+  DESIGN = "DESIGN",
+  ADMIN = "ADMIN",
+  OTHER = "OTHER",
 }
 
 export enum ReportReason {
-  NO_SHOW = 'NO_SHOW',
-  INAPPROPRIATE = 'INAPPROPRIATE',
-  HARASSMENT = 'HARASSMENT',
-  SPAM = 'SPAM',
-  OTHER = 'OTHER'
+  NO_SHOW = "NO_SHOW",
+  INAPPROPRIATE = "INAPPROPRIATE",
+  HARASSMENT = "HARASSMENT",
+  SPAM = "SPAM",
+  OTHER = "OTHER",
 }
 
 export enum ReportStatus {
-  OPEN = 'OPEN',
-  REVIEWED = 'REVIEWED',
-  RESOLVED = 'RESOLVED',
-  DISMISSED = 'DISMISSED'
+  OPEN = "OPEN",
+  REVIEWED = "REVIEWED",
+  RESOLVED = "RESOLVED",
+  DISMISSED = "DISMISSED",
 }
 
 // ZOD SCHEMAS
 
 export const RegisterInput = z.object({
-  email: z.string().email('Invalid email address'),
-  password: z.string().min(8, 'Password must be at least 8 characters'),
-  displayName: z.string().min(2, 'Display name must be at least 2 characters'),
-  username: z.string().min(3, 'Username must be at least 3 characters').regex(/^[a-zA-Z0-9_-]+$/, 'Username can only contain letters, numbers, underscores, and hyphens'),
+  email: z.string().email("Invalid email address"),
+  password: z.string().min(8, "Password must be at least 8 characters"),
+  displayName: z.string().min(2, "Display name must be at least 2 characters"),
+  username: z
+    .string()
+    .min(3, "Username must be at least 3 characters")
+    .regex(
+      /^[a-zA-Z0-9_-]+$/,
+      "Username can only contain letters, numbers, underscores, and hyphens",
+    ),
 });
 export type RegisterInput = z.infer<typeof RegisterInput>;
 
 export const LoginInput = z.object({
-  email: z.string().email('Invalid email address'),
-  password: z.string().min(1, 'Password is required'),
+  email: z.string().email("Invalid email address"),
+  password: z.string().min(1, "Password is required"),
 });
 export type LoginInput = z.infer<typeof LoginInput>;
 
 export const OnboardingInput = z.object({
   timezone: z.string(),
-  categories: z.array(z.nativeEnum(Category)).min(1, 'Select at least one category'),
-  preferredLength: z.array(z.number()).min(1, 'Select at least one preferred length'),
+  categories: z
+    .array(z.nativeEnum(Category))
+    .min(1, "Select at least one category"),
+  preferredLength: z
+    .array(z.number())
+    .min(1, "Select at least one preferred length"),
 });
 export type OnboardingInput = z.infer<typeof OnboardingInput>;
 
@@ -73,7 +83,7 @@ export type CreateSessionInput = z.infer<typeof CreateSessionInput>;
 
 export const CreateReflectionInput = z.object({
   sessionId: z.string().cuid(),
-  text: z.string().min(1, 'Reflection text is required'),
+  text: z.string().min(1, "Reflection text is required"),
   rating: z.number().int().min(1).max(5).optional(),
 });
 export type CreateReflectionInput = z.infer<typeof CreateReflectionInput>;
@@ -90,6 +100,33 @@ export const CreateBlockInput = z.object({
   blockedId: z.string().cuid(),
 });
 export type CreateBlockInput = z.infer<typeof CreateBlockInput>;
+
+export const UpdateProfileInput = z.object({
+  displayName: z.string().min(2).max(50).optional(),
+  username: z
+    .string()
+    .min(3)
+    .max(30)
+    .regex(/^[a-zA-Z0-9_-]+$/)
+    .optional(),
+  timezone: z.string().min(1).max(100).optional(),
+});
+export type UpdateProfileInput = z.infer<typeof UpdateProfileInput>;
+
+export const UpdatePreferencesInput = z.object({
+  googleCalendarSync: z.boolean().optional(),
+  emailCalendarInvites: z.boolean().optional(),
+  performanceReports: z.boolean().optional(),
+  desktopNotifications: z.boolean().optional(),
+  quietMode: z.boolean().optional(),
+  preferFavorites: z.boolean().optional(),
+  timeFormat: z.string().optional(),
+  weekStartsOn: z.string().optional(),
+  autoRematch: z.boolean().optional(),
+  mutedOnJoin: z.boolean().optional(),
+  availability: z.string().optional(),
+});
+export type UpdatePreferencesInput = z.infer<typeof UpdatePreferencesInput>;
 
 // API RESPONSE WRAPPERS
 

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useCallback } from "react";
+import React, { useState, useCallback, useEffect } from "react";
 import {
   Home,
   Users,
@@ -9,12 +9,17 @@ import {
   HelpCircle,
   Shuffle,
   ChevronDown,
+  ChevronUp,
   X,
   Calendar,
   Star,
   Video,
   MessageSquare,
   HelpCircle as HelpIcon,
+  Menu,
+  ExternalLink,
+  Trash2,
+  Pencil,
 } from "lucide-react";
 import { cn } from "@focusUp/ui/lib/utils";
 import {
@@ -22,7 +27,16 @@ import {
   AvatarFallback,
   AvatarImage,
 } from "@focusUp/ui/components/avatar";
-import { useCurrentUser, useUserStats } from "@/hooks/useUser";
+import { Skeleton } from "@focusUp/ui/components/skeleton";
+import { Sheet, SheetContent } from "@focusUp/ui/components/sheet";
+import {
+  useCurrentUser,
+  useUserStats,
+  useUserPreferences,
+  useUpdatePreferences,
+} from "@/hooks/useUser";
+import { useCreateBooking } from "@/hooks/useBookings";
+import { toast } from "sonner";
 import { CalendarView } from "@/components/dashboard/CalendarView";
 
 // ── Types ──────────────────────────────────────────────────────
@@ -118,6 +132,8 @@ function BookingPanel({
   onClearAll,
   onBookAll,
   isBooking,
+  isOpen,
+  onToggle,
 }: {
   duration: number;
   setDuration: (d: number) => void;
@@ -126,11 +142,27 @@ function BookingPanel({
   onClearAll: () => void;
   onBookAll: () => void;
   isBooking: boolean;
+  isOpen: boolean;
+  onToggle: () => void;
 }) {
   const DURATIONS = [25, 50, 75];
 
   return (
-    <div className="w-[260px] bg-white border-r border-slate-200/60 flex flex-col shrink-0 h-full">
+    <div className="w-[260px] bg-white flex flex-col shrink-0 h-full">
+      {/* Header with toggle */}
+      <div className="flex items-center justify-between px-4 pt-4 pb-0 shrink-0">
+        <span className="text-xs font-bold text-slate-400 uppercase tracking-widest">
+          Session
+        </span>
+        <button
+          onClick={onToggle}
+          title={isOpen ? "Collapse panel" : "Expand panel"}
+          className="text-slate-400 hover:text-slate-600 text-xs font-bold tracking-widest transition-colors"
+        >
+          {isOpen ? "«" : "»"}
+        </button>
+      </div>
+
       <div className="p-4 space-y-4 flex-1 overflow-y-auto">
         {/* Book session CTA */}
         <button
@@ -171,9 +203,17 @@ function BookingPanel({
         {selectedSlots.length > 0 && (
           <>
             <div className="h-px bg-slate-100" />
-            <div className="text-xs font-bold text-slate-500">
-              {selectedSlots.length} Session
-              {selectedSlots.length !== 1 ? "s" : ""} Selected
+            <div className="flex items-center justify-between">
+              <div className="text-xs font-bold text-slate-500">
+                {selectedSlots.length} Session
+                {selectedSlots.length !== 1 ? "s" : ""} Selected
+              </div>
+              <button
+                onClick={onClearAll}
+                className="text-xs text-slate-400 hover:text-red-500 transition-colors"
+              >
+                Clear all
+              </button>
             </div>
 
             <div className="space-y-2">
@@ -215,7 +255,7 @@ function BookingPanel({
 
 // ── Right Profile Panel ───────────────────────────────────────
 
-function RightProfilePanel() {
+function RightProfilePanel({ onCollapse }: { onCollapse: () => void }) {
   const { data: userData } = useCurrentUser();
   const { data: statsData } = useUserStats();
   const user = userData?.data?.user;
@@ -228,11 +268,15 @@ function RightProfilePanel() {
   const isPro = stats?.planTier === "PRO" || stats?.planTier === "TEAM";
 
   return (
-    <div className="w-[260px] bg-white border-l border-slate-200/60 flex flex-col shrink-0 h-full">
+    <div className="w-[260px] bg-white flex flex-col shrink-0 h-full">
       <div className="flex-1 overflow-y-auto">
-        {/* Top expand toggle */}
+        {/* Top collapse toggle */}
         <div className="flex justify-end p-3 border-b border-slate-100">
-          <button className="text-slate-400 hover:text-slate-600 text-xs font-bold tracking-widest">
+          <button
+            onClick={onCollapse}
+            title="Collapse panel"
+            className="text-slate-400 hover:text-slate-600 text-xs font-bold tracking-widest transition-colors"
+          >
             »
           </button>
         </div>
@@ -399,13 +443,29 @@ function RewardsPanel() {
 // ── Center Panel: Settings ────────────────────────────────────
 
 function SettingsPanel() {
+  const { data: userData } = useCurrentUser();
+  const user = userData?.data?.user;
+
   const [settingsTab, setSettingsTab] = useState<
     "notifications" | "preferences" | "account"
   >("notifications");
+  const { data: prefsData } = useUserPreferences();
+  const updatePreferences = useUpdatePreferences();
+  const prefs = prefsData?.data?.preferences;
+
+  const [gcal, setGcal] = useState(false);
   const [emailCalendar, setEmailCalendar] = useState(true);
   const [perfReports, setPerfReports] = useState(true);
   const [desktopNotifs, setDesktopNotifs] = useState(true);
-  const [gcal, setGcal] = useState(false);
+
+  useEffect(() => {
+    if (prefs) {
+      setGcal(prefs.googleCalendarSync);
+      setEmailCalendar(prefs.emailCalendarInvites);
+      setPerfReports(prefs.performanceReports);
+      setDesktopNotifs(prefs.desktopNotifications);
+    }
+  }, [prefs]);
 
   const Toggle = ({
     value,
@@ -479,44 +539,239 @@ function SettingsPanel() {
       </div>
 
       <div className="flex-1 overflow-y-auto px-8 py-2">
+        {/* ── Notifications tab ── */}
         {settingsTab === "notifications" && (
           <div>
             <SettingRow
               title="Google Calendar Integration"
               description="Get sessions added to your calendar. Not connected."
               value={gcal}
-              onChange={() => setGcal((v) => !v)}
+              onChange={() => {
+                const next = !gcal;
+                setGcal(next);
+                updatePreferences.mutate(
+                  { googleCalendarSync: next },
+                  { onSuccess: () => toast.success("Settings saved") },
+                );
+              }}
             />
             <SettingRow
               title="Email Calendar Invites"
               description="Get calendar events for sessions via email. Works with most calendars."
               value={emailCalendar}
-              onChange={() => setEmailCalendar((v) => !v)}
+              onChange={() => {
+                const next = !emailCalendar;
+                setEmailCalendar(next);
+                updatePreferences.mutate(
+                  { emailCalendarInvites: next },
+                  { onSuccess: () => toast.success("Settings saved") },
+                );
+              }}
             />
             <SettingRow
               title="Performance Reports"
               description="Get weekly and monthly reports celebrating your accomplishments."
               value={perfReports}
-              onChange={() => setPerfReports((v) => !v)}
+              onChange={() => {
+                const next = !perfReports;
+                setPerfReports(next);
+                updatePreferences.mutate(
+                  { performanceReports: next },
+                  { onSuccess: () => toast.success("Settings saved") },
+                );
+              }}
             />
             <SettingRow
               title="Desktop Notifications"
               description="Get notified when a session is about to start."
               value={desktopNotifs}
-              onChange={() => setDesktopNotifs((v) => !v)}
+              onChange={() => {
+                const next = !desktopNotifs;
+                setDesktopNotifs(next);
+                updatePreferences.mutate(
+                  { desktopNotifications: next },
+                  { onSuccess: () => toast.success("Settings saved") },
+                );
+              }}
             />
           </div>
         )}
+
+        {/* ── Preferences tab ── */}
         {settingsTab === "preferences" && (
-          <div className="py-8 text-center text-slate-400">
-            <Settings className="w-10 h-10 mx-auto mb-3 opacity-30" />
-            <p className="text-sm">Preferences settings coming soon</p>
+          <div className="divide-y divide-slate-100">
+            {[
+              {
+                title: "Focusmate Guides Preference",
+                value: "Complete 15 sessions to unlock",
+                hasEdit: true,
+                disabled: true,
+              },
+              { title: "Availability", value: "Everyone", hasEdit: true },
+              {
+                title: "Quiet Mode",
+                value:
+                  "I'm okay being matched with someone in Quiet Mode even if I'm not in Quiet Mode",
+                hasEdit: true,
+              },
+              { title: "Prefer Favorites", value: "Anyone", hasEdit: true },
+              {
+                title: "Gender Preference",
+                value: "Match me with everyone",
+                hasEdit: true,
+              },
+              {
+                title: "Time Format",
+                value: "12-hour (AM/PM)",
+                hasEdit: true,
+              },
+              {
+                title: "My week starts on",
+                value: "Monday",
+                hasEdit: true,
+              },
+              {
+                title: "Auto Rematch",
+                value: "Do not auto rematch if my partner is late",
+                hasEdit: true,
+              },
+              {
+                title: "Microphone",
+                value: "Unmuted when I join a session",
+                hasEdit: true,
+              },
+            ].map(({ title, value, disabled }) => (
+              <div
+                key={title}
+                className="flex items-start justify-between py-5"
+              >
+                <div className="flex-1">
+                  <div className="text-sm font-semibold text-slate-800">
+                    {title}
+                  </div>
+                  <div className="text-sm text-slate-500 mt-0.5">{value}</div>
+                </div>
+                <button
+                  disabled={!!disabled}
+                  className="w-9 h-9 flex items-center justify-center rounded-xl border border-slate-200 text-slate-400 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors shrink-0"
+                >
+                  <Pencil className="w-4 h-4" />
+                </button>
+              </div>
+            ))}
+
+            {/* Dark Mode row with toggle */}
+            <div className="flex items-start justify-between py-5">
+              <div>
+                <div className="text-sm font-semibold text-slate-800">
+                  Dark Mode
+                </div>
+                <div className="text-sm text-slate-500 mt-0.5">
+                  Dark Mode Disabled
+                </div>
+              </div>
+              <Toggle value={false} onChange={() => {}} />
+            </div>
           </div>
         )}
+
+        {/* ── Account tab ── */}
         {settingsTab === "account" && (
-          <div className="py-8 text-center text-slate-400">
-            <Settings className="w-10 h-10 mx-auto mb-3 opacity-30" />
-            <p className="text-sm">Account settings coming soon</p>
+          <div>
+            {/* Basic info */}
+            <div className="divide-y divide-slate-100">
+              {[
+                { title: "Name", value: user?.displayName ?? "—" },
+                { title: "Gender", value: "Not set yet" },
+                { title: "Timezone", value: user?.timezone ?? "UTC" },
+                {
+                  title: "Profile link",
+                  value: `focusup.app/user/${user?.username ?? "—"}`,
+                },
+              ].map(({ title, value }) => (
+                <div
+                  key={title}
+                  className="flex items-start justify-between py-5"
+                >
+                  <div>
+                    <div className="text-sm font-semibold text-slate-800">
+                      {title}
+                    </div>
+                    <div className="text-sm text-slate-500 mt-0.5">{value}</div>
+                  </div>
+                  <button className="w-9 h-9 flex items-center justify-center rounded-xl border border-slate-200 text-slate-400 hover:bg-slate-50 transition-colors shrink-0">
+                    <Pencil className="w-4 h-4" />
+                  </button>
+                </div>
+              ))}
+            </div>
+
+            {/* Connected apps & API */}
+            <div className="border-t border-slate-100 mt-2 pt-2 divide-y divide-slate-100">
+              {[
+                {
+                  title: "Connected apps",
+                  value:
+                    "Manage which applications can access your focusUp data.",
+                },
+                {
+                  title: "API Key",
+                  value: "Access your focusUp data programmatically.",
+                },
+              ].map(({ title, value }) => (
+                <div
+                  key={title}
+                  className="flex items-start justify-between py-5"
+                >
+                  <div className="flex-1 pr-4">
+                    <div className="text-sm font-semibold text-slate-800">
+                      {title}
+                    </div>
+                    <div className="text-sm text-slate-500 mt-0.5">{value}</div>
+                  </div>
+                  <button className="w-9 h-9 flex items-center justify-center rounded-xl border border-slate-200 text-slate-400 hover:bg-slate-50 transition-colors shrink-0">
+                    <Pencil className="w-4 h-4" />
+                  </button>
+                </div>
+              ))}
+            </div>
+
+            {/* Subscription & danger zone */}
+            <div className="border-t border-slate-100 mt-2 pt-2 divide-y divide-slate-100">
+              <div className="flex items-start justify-between py-5">
+                <div className="flex-1 pr-4">
+                  <div className="text-sm font-semibold text-slate-800">
+                    Manage subscription
+                  </div>
+                  <div className="text-sm text-slate-500 mt-0.5">
+                    Update your payment method, view invoices, and cancel/renew.
+                  </div>
+                  <div className="text-sm font-semibold text-slate-700 mt-2">
+                    Your referrals balance
+                  </div>
+                  <div className="text-sm text-slate-500">
+                    Total earned: 0 months
+                  </div>
+                </div>
+                <button className="w-9 h-9 flex items-center justify-center rounded-xl border border-slate-200 text-slate-400 hover:bg-slate-50 transition-colors shrink-0">
+                  <ExternalLink className="w-4 h-4" />
+                </button>
+              </div>
+
+              <div className="flex items-start justify-between py-5">
+                <div>
+                  <div className="text-sm font-semibold text-red-600">
+                    Delete account
+                  </div>
+                  <div className="text-sm text-slate-500 mt-0.5">
+                    Permanently delete your account and all your data.
+                  </div>
+                </div>
+                <button className="w-9 h-9 flex items-center justify-center rounded-xl border border-red-200 text-red-400 hover:bg-red-50 transition-colors shrink-0">
+                  <Trash2 className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
           </div>
         )}
       </div>
@@ -549,6 +804,11 @@ export default function DashboardPage() {
   const [duration, setDuration] = useState(50);
   const [selectedSlots, setSelectedSlots] = useState<SelectedSlot[]>([]);
   const [isBooking, setIsBooking] = useState(false);
+  const [isLeftPanelOpen, setIsLeftPanelOpen] = useState(true);
+  const [isRightPanelOpen, setIsRightPanelOpen] = useState(true);
+  const [mobileBookingOpen, setMobileBookingOpen] = useState(false);
+
+  const createBooking = useCreateBooking();
 
   const handleSlotSelected = useCallback(
     (slot: {
@@ -574,11 +834,25 @@ export default function DashboardPage() {
   const handleClearAll = useCallback(() => setSelectedSlots([]), []);
 
   const handleBookAll = useCallback(async () => {
-    if (selectedSlots.length === 0) return;
+    if (selectedSlots.length === 0 || isBooking) return;
     setIsBooking(true);
-    // Actual multi-booking logic will be wired to the booking mutation
-    setTimeout(() => setIsBooking(false), 2000);
-  }, [selectedSlots]);
+    try {
+      for (const slot of selectedSlots) {
+        await createBooking.mutateAsync({
+          slotTime: slot.slotTime,
+          durationMin: slot.durationMin,
+        });
+      }
+      setSelectedSlots([]);
+      toast.success(
+        `${selectedSlots.length} session${selectedSlots.length !== 1 ? "s" : ""} booked!`,
+      );
+    } catch (e: unknown) {
+      toast.error(e instanceof Error ? e.message : "Failed to book sessions");
+    } finally {
+      setIsBooking(false);
+    }
+  }, [selectedSlots, isBooking, createBooking]);
 
   return (
     <>
@@ -593,59 +867,264 @@ export default function DashboardPage() {
         }}
       />
 
-      <div className="flex h-screen overflow-hidden">
-        {/* 1. Left narrow nav */}
+      <div className="flex h-screen overflow-hidden bg-slate-100">
+        {/* ── Shared left narrow nav (always visible) ── */}
         <LeftNav activeTab={activeTab} setActiveTab={setActiveTab} />
 
-        {/* 2. Left booking panel */}
-        <BookingPanel
-          duration={duration}
-          setDuration={setDuration}
-          selectedSlots={selectedSlots}
-          onRemoveSlot={handleRemoveSlot}
-          onClearAll={handleClearAll}
-          onBookAll={handleBookAll}
-          isBooking={isBooking}
-        />
+        {/* ════════════════════════════════════════════
+            MOBILE LAYOUT  (md:hidden)
+        ════════════════════════════════════════════ */}
+        <div className="md:hidden flex flex-col flex-1 h-full overflow-hidden bg-white">
+          {/* Main content area */}
+          <div className="flex-1 overflow-hidden">
+            {activeTab === "calendar" && (
+              <CalendarView
+                durationSelected={duration}
+                taskType="desk"
+                onSlotSelected={handleSlotSelected}
+              />
+            )}
+            {activeTab === "people" && <PeoplePanel />}
+            {activeTab === "rewards" && <RewardsPanel />}
+            {activeTab === "settings" && <SettingsPanel />}
+            {activeTab === "help" && <HelpPanel />}
+          </div>
 
-        {/* 3. Center panel */}
-        <div className="flex-1 flex flex-col overflow-hidden relative">
+          {/* Mobile bottom controls — calendar tab only */}
           {activeTab === "calendar" && (
-            <CalendarView
-              durationSelected={duration}
-              taskType="desk"
-              onSlotSelected={handleSlotSelected}
-            />
-          )}
-          {activeTab === "people" && <PeoplePanel />}
-          {activeTab === "rewards" && <RewardsPanel />}
-          {activeTab === "settings" && <SettingsPanel />}
-          {activeTab === "help" && <HelpPanel />}
+            <div className="shrink-0 bg-white border-t border-slate-200 px-4 py-3">
+              <div className="flex items-center gap-2">
+                {[25, 50, 75].map((d) => (
+                  <button
+                    key={d}
+                    onClick={() => setDuration(d)}
+                    className={cn(
+                      "flex-1 py-2 rounded-xl text-sm font-bold transition-all",
+                      duration === d
+                        ? "bg-[#0245A3]/10 text-[#0245A3] border border-[#0245A3]/20"
+                        : "bg-slate-100 text-slate-500",
+                    )}
+                  >
+                    {d}m
+                  </button>
+                ))}
+                <button className="w-10 h-10 flex items-center justify-center bg-slate-100 rounded-xl text-slate-500">
+                  <Shuffle className="w-4 h-4" />
+                </button>
+                <button
+                  onClick={() => setMobileBookingOpen(true)}
+                  className="w-10 h-10 flex items-center justify-center bg-slate-100 rounded-xl text-slate-500"
+                >
+                  <ChevronUp className="w-4 h-4" />
+                </button>
+              </div>
 
-          {/* Bottom booking bar — appears when slots are selected on calendar */}
-          {activeTab === "calendar" && selectedSlots.length > 0 && (
-            <div className="shrink-0 flex items-center gap-3 px-6 py-4 bg-white border-t border-slate-200 shadow-lg">
-              <button
-                onClick={handleClearAll}
-                className="flex-1 py-3 rounded-xl border-2 border-slate-200 text-sm font-bold text-slate-500 hover:border-slate-300 hover:bg-slate-50 transition-all"
-              >
-                Clear All
-              </button>
-              <button
-                onClick={handleBookAll}
-                disabled={isBooking}
-                className="flex-1 py-3 rounded-xl bg-[#0245A3] text-white text-sm font-bold hover:brightness-110 transition-all active:scale-[0.98] shadow-lg shadow-[#0245A3]/20 disabled:opacity-60"
-              >
-                {isBooking
-                  ? "Booking..."
-                  : `Book ${selectedSlots.length} session${selectedSlots.length !== 1 ? "s" : ""}`}
-              </button>
+              {/* Booking bar when slots selected */}
+              {selectedSlots.length > 0 && (
+                <div className="flex gap-2 mt-3">
+                  <button
+                    onClick={handleClearAll}
+                    className="flex-1 py-2.5 rounded-xl border-2 border-slate-200 text-sm font-bold text-slate-500"
+                  >
+                    Clear All
+                  </button>
+                  <button
+                    onClick={handleBookAll}
+                    disabled={isBooking}
+                    className="flex-1 py-2.5 rounded-xl bg-[#0245A3] text-white text-sm font-bold disabled:opacity-60"
+                  >
+                    {isBooking ? "..." : `Book ${selectedSlots.length}`}
+                  </button>
+                </div>
+              )}
             </div>
+          )}
+
+          {/* Mobile bottom nav */}
+          <nav className="shrink-0 bg-white border-t border-slate-200 flex items-center justify-around px-2 py-2">
+            {[
+              { id: "calendar" as TabId, icon: Home, label: "Home" },
+              { id: "people" as TabId, icon: Calendar, label: "Schedule" },
+              { id: "rewards" as TabId, icon: Star, label: "Favorites" },
+              { id: "settings" as TabId, icon: Menu, label: "Menu" },
+            ].map(({ id, icon: Icon, label }) => (
+              <button
+                key={id}
+                onClick={() => setActiveTab(id)}
+                className={cn(
+                  "flex flex-col items-center gap-1 px-4 py-2 rounded-xl transition-all",
+                  activeTab === id ? "bg-[#0245A3]/10" : "",
+                )}
+              >
+                <Icon
+                  className={cn(
+                    "w-5 h-5",
+                    activeTab === id ? "text-[#0245A3]" : "text-slate-400",
+                  )}
+                  strokeWidth={activeTab === id ? 2.5 : 2}
+                />
+                <span
+                  className={cn(
+                    "text-[10px] font-bold",
+                    activeTab === id ? "text-[#0245A3]" : "text-slate-400",
+                  )}
+                >
+                  {label}
+                </span>
+              </button>
+            ))}
+          </nav>
+        </div>
+
+        {/* ════════════════════════════════════════════
+            DESKTOP LAYOUT  (hidden md:flex)
+        ════════════════════════════════════════════ */}
+        <div className="hidden md:flex flex-1 h-full gap-3 p-3 overflow-hidden">
+          {/* Booking panel card */}
+          {isLeftPanelOpen && (
+            <div className="rounded-2xl overflow-hidden shadow-sm border border-slate-200/60 shrink-0 bg-white">
+              <BookingPanel
+                duration={duration}
+                setDuration={setDuration}
+                selectedSlots={selectedSlots}
+                onRemoveSlot={handleRemoveSlot}
+                onClearAll={handleClearAll}
+                onBookAll={handleBookAll}
+                isBooking={isBooking}
+                isOpen={isLeftPanelOpen}
+                onToggle={() => setIsLeftPanelOpen(false)}
+              />
+            </div>
+          )}
+
+          {/* Collapsed left panel re-open strip */}
+          {!isLeftPanelOpen && (
+            <button
+              onClick={() => setIsLeftPanelOpen(true)}
+              className="w-10 bg-white rounded-2xl shadow-sm border border-slate-200/60 flex items-center justify-center text-slate-400 hover:text-slate-600 shrink-0 transition-colors"
+              title="Expand booking panel"
+            >
+              »
+            </button>
+          )}
+
+          {/* Center card */}
+          <div className="flex-1 rounded-2xl overflow-hidden shadow-sm border border-slate-200/60 flex flex-col bg-white min-w-0">
+            {activeTab === "calendar" && (
+              <CalendarView
+                durationSelected={duration}
+                taskType="desk"
+                onSlotSelected={handleSlotSelected}
+              />
+            )}
+            {activeTab === "people" && <PeoplePanel />}
+            {activeTab === "rewards" && <RewardsPanel />}
+            {activeTab === "settings" && <SettingsPanel />}
+            {activeTab === "help" && <HelpPanel />}
+
+            {/* Booking bar — appears when slots are selected */}
+            {activeTab === "calendar" && selectedSlots.length > 0 && (
+              <div className="shrink-0 flex items-center gap-3 px-4 py-3 border-t border-slate-200 bg-white">
+                <button
+                  onClick={handleClearAll}
+                  className="flex-1 py-2.5 rounded-xl border-2 border-slate-200 text-sm font-bold text-slate-500 hover:bg-slate-50 transition-all"
+                >
+                  Clear All
+                </button>
+                <button
+                  onClick={handleBookAll}
+                  disabled={isBooking}
+                  className="flex-1 py-2.5 rounded-xl bg-[#0245A3] text-white text-sm font-bold hover:brightness-110 transition-all active:scale-[0.98] disabled:opacity-60"
+                >
+                  {isBooking
+                    ? "Booking..."
+                    : `Book ${selectedSlots.length} session${selectedSlots.length !== 1 ? "s" : ""}`}
+                </button>
+              </div>
+            )}
+          </div>
+
+          {/* Right panel card */}
+          {isRightPanelOpen && (
+            <div className="rounded-2xl overflow-hidden shadow-sm border border-slate-200/60 shrink-0 bg-white">
+              <RightProfilePanel
+                onCollapse={() => setIsRightPanelOpen(false)}
+              />
+            </div>
+          )}
+
+          {/* Collapsed right panel re-open strip */}
+          {!isRightPanelOpen && (
+            <button
+              onClick={() => setIsRightPanelOpen(true)}
+              className="w-10 bg-white rounded-2xl shadow-sm border border-slate-200/60 flex items-center justify-center text-slate-400 hover:text-slate-600 shrink-0 transition-colors"
+              title="Expand profile panel"
+            >
+              «
+            </button>
           )}
         </div>
 
-        {/* 4. Right profile panel */}
-        <RightProfilePanel />
+        {/* ════════════════════════════════════════════
+            MOBILE BOOKING SETTINGS SHEET
+        ════════════════════════════════════════════ */}
+        <Sheet open={mobileBookingOpen} onOpenChange={setMobileBookingOpen}>
+          <SheetContent side="bottom" className="rounded-t-2xl bg-white p-6">
+            <div className="space-y-5">
+              <div className="flex items-center justify-between">
+                <h3 className="text-base font-bold text-slate-800">
+                  Session Settings
+                </h3>
+                <button
+                  className="w-8 h-8 flex items-center justify-center rounded-lg bg-slate-100"
+                  onClick={() => setMobileBookingOpen(false)}
+                >
+                  <ChevronDown className="w-4 h-4 text-slate-500" />
+                </button>
+              </div>
+
+              <div className="space-y-2">
+                <div className="text-xs font-bold text-slate-400 uppercase tracking-widest">
+                  Duration
+                </div>
+                <div className="grid grid-cols-3 gap-2">
+                  {[25, 50, 75].map((d) => (
+                    <button
+                      key={d}
+                      onClick={() => setDuration(d)}
+                      className={cn(
+                        "py-3 rounded-xl text-sm font-bold flex flex-col items-center gap-0.5 transition-all",
+                        duration === d
+                          ? "bg-[#0245A3] text-white"
+                          : "bg-slate-100 text-slate-500",
+                      )}
+                    >
+                      <span>{d}</span>
+                      <span className="text-[9px] opacity-80">min</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="h-px bg-slate-100" />
+
+              <button
+                onClick={() => {
+                  handleBookAll();
+                  setMobileBookingOpen(false);
+                }}
+                disabled={selectedSlots.length === 0 || isBooking}
+                className="w-full py-4 bg-[#0245A3] text-white rounded-2xl text-sm font-bold hover:brightness-110 transition-all disabled:opacity-60"
+              >
+                {isBooking
+                  ? "Booking..."
+                  : selectedSlots.length > 0
+                    ? `Book ${selectedSlots.length} session${selectedSlots.length !== 1 ? "s" : ""}`
+                    : "Book session"}
+              </button>
+            </div>
+          </SheetContent>
+        </Sheet>
       </div>
     </>
   );

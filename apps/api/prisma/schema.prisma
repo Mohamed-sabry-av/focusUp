@@ -85,6 +85,7 @@ model User {
   blocks           Block[]      @relation("Blocker")
   blockedBy        Block[]      @relation("Blocked")
   bookingRequests  BookingRequest[]
+  preferences      UserPreferences?
 }
 
 model Session {
@@ -171,4 +172,24 @@ model BookingRequest {
   @@index([slotTime])
   @@index([status])
   @@index([userId])
+}
+
+model UserPreferences {
+  id                    String   @id @default(cuid())
+  userId                String   @unique
+  googleCalendarSync    Boolean  @default(false)
+  emailCalendarInvites  Boolean  @default(true)
+  performanceReports    Boolean  @default(true)
+  desktopNotifications  Boolean  @default(true)
+  quietMode             Boolean  @default(false)
+  preferFavorites       Boolean  @default(false)
+  timeFormat            String   @default("12h")
+  weekStartsOn          String   @default("monday")
+  autoRematch           Boolean  @default(false)
+  mutedOnJoin           Boolean  @default(false)
+  availability          String   @default("everyone")
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 }

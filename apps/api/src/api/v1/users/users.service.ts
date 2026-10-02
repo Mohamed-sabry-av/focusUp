@@ -1,5 +1,9 @@
 import { prisma } from "../../../lib/prisma";
-import type { OnboardingInput } from "@focusUp/shared-types";
+import type {
+  OnboardingInput,
+  UpdateProfileInput,
+  UpdatePreferencesInput,
+} from "@focusUp/shared-types";
 import { AppError } from "../../../utils/errors";
 import { SessionStatus, PlanTier } from "@prisma/client";
 
@@ -35,6 +39,26 @@ export class UsersService {
     }
 
     const { passwordHash: _, ...safeUser } = user;
+    return safeUser;
+  }
+
+  static async updateProfile(userId: string, data: UpdateProfileInput) {
+    if (data.username) {
+      const existing = await prisma.user.findFirst({
+        where: { username: data.username, id: { not: userId } },
+      });
+      if (existing) throw new AppError("Username already taken", 409);
+    }
+
+    const updated = await prisma.user.update({
+      where: { id: userId },
+      data: {
+        ...(data.displayName && { displayName: data.displayName }),
+        ...(data.username && { username: data.username }),
+        ...(data.timezone && { timezone: data.timezone }),
+      },
+    });
+    const { passwordHash: _, ...safeUser } = updated;
     return safeUser;
   }
 
@@ -119,10 +143,8 @@ export class UsersService {
           checkDay.setDate(checkDay.getDate() - 1),
         ).getTime();
       } else {
-        // If no sessions today, it might still be a streak if there were sessions yesterday
-        // But the requirement says "consecutive days going backward from today"
-        // If today has no sessions, is the streak 0 or yesterday's streak?
-        // Let's check if today has no sessions but yesterday had. If today is still going, streak should include yesterday.
+        // If today has no sessions, it might still be a streak if there were sessions yesterday.
+        // If today is still going, streak should include yesterday.
         if (checkDayAtStart === this.getStartOfDay(now)) {
           // Check yesterday
           checkDayAtStart = new Date(
@@ -158,6 +180,56 @@ export class UsersService {
 
     const { passwordHash: _, ...safeUser } = user;
     return safeUser;
+  }
+
+  /**
+   * P3-17: GDPR data export — returns all user data except passwordHash.
+   * Rate limited to 1/hour at the route level.
+   */
+  static async getDataExport(userId: string) {
+    const [user, sessions, reflections, reports, bookingRequests] =
+      await Promise.all([
+        prisma.user.findUnique({
+          where: { id: userId },
+          select: {
+            id: true,
+            email: true,
+            displayName: true,
+            username: true,
+            avatarUrl: true,
+            timezone: true,
+            categories: true,
+            preferredLength: true,
+            planTier: true,
+            strikeCount: true,
+            isActive: true,
+            isBanned: true,
+            emailVerified: true,
+            isAdmin: true,
+            createdAt: true,
+            updatedAt: true,
+            // passwordHash intentionally excluded
+          },
+        }),
+        prisma.session.findMany({
+          where: { OR: [{ user1Id: userId }, { user2Id: userId }] },
+          orderBy: { scheduledAt: "desc" },
+        }),
+        prisma.reflection.findMany({
+          where: { userId },
+          orderBy: { createdAt: "desc" },
+        }),
+        prisma.report.findMany({
+          where: { reporterId: userId },
+          orderBy: { createdAt: "desc" },
+        }),
+        prisma.bookingRequest.findMany({
+          where: { userId },
+          orderBy: { createdAt: "desc" },
+        }),
+      ]);
+
+    return { user, sessions, reflections, reports, bookingRequests };
   }
 
   /**
@@ -252,5 +324,25 @@ export class UsersService {
       page,
       totalPages: Math.ceil(total / limit),
     };
+  }
+
+  static async getPreferences(userId: string) {
+    let prefs = await prisma.userPreferences.findUnique({ where: { userId } });
+    if (!prefs) {
+      prefs = await prisma.userPreferences.create({ data: { userId } });
+    }
+    return prefs;
+  }
+
+  static async updatePreferences(
+    userId: string,
+    data: Partial<UpdatePreferencesInput>,
+  ) {
+    const prefs = await prisma.userPreferences.upsert({
+      where: { userId },
+      update: data,
+      create: { userId, ...data },
+    });
+    return prefs;
   }
 }

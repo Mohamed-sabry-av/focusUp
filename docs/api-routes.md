@@ -1,0 +1,510 @@
+# FocusUP API Route Inventory
+
+**Base URL**: `/api/v1`  
+**Auth mechanism**: httpOnly cookies (`access_token` + `refresh_token`)  
+**Error shape**: `{ error: string, statusCode: number, details?: any }`  
+**Success shape**: `{ data: T, statusCode: number }` (paginated: `{ data: T[], total, page, totalPages, statusCode }`)
+
+---
+
+## Table of Contents
+
+1. [AUTH](#auth)
+2. [USERS](#users)
+3. [SESSIONS](#sessions)
+4. [BOOKINGS](#bookings)
+5. [REFLECTIONS](#reflections)
+6. [REPORTS](#reports)
+7. [BLOCKS](#blocks)
+8. [NOTIFICATIONS](#notifications)
+9. [ADMIN](#admin)
+10. [WEBHOOKS](#webhooks)
+11. [HEALTH](#health)
+
+---
+
+## AUTH
+
+> All auth endpoints are rate-limited to **5 req/min per IP** (global `authLimiter` on `/api/v1/auth`).  
+> `/resend-verification` has an additional **1 req/min** limiter.
+
+---
+
+### POST /api/v1/auth/register
+
+- **Auth**: None
+- **Body**: `{ email: string, password: string (min 8), displayName: string (min 2), username: string (min 3, alphanumeric/_/-) }`
+- **Response**: `201 { id, email, displayName, username, avatarUrl, planTier, emailVerified, ... }` + sets `access_token` (15 min) and `refresh_token` (7 d) httpOnly cookies
+- **Errors**: `400` validation failure, `409` email or username already taken
+
+---
+
+### POST /api/v1/auth/login
+
+- **Auth**: None
+- **Body**: `{ email: string, password: string }`
+- **Response**: `200 { id, email, displayName, username, ... }` + sets `access_token` and `refresh_token` cookies
+- **Errors**: `400` validation failure, `401` invalid credentials, `403` account banned or deactivated
+
+---
+
+### POST /api/v1/auth/logout
+
+- **Auth**: None (cookies are cleared regardless)
+- **Body**: None
+- **Response**: `200 { message: "Logged out successfully" }` + clears `access_token` and `refresh_token` cookies
+- **Errors**: —
+
+---
+
+### POST /api/v1/auth/refresh
+
+- **Auth**: None (reads `refresh_token` cookie)
+- **Body**: None
+- **Response**: `200 { message: "Tokens refreshed" }` + rotates both cookies
+- **Errors**: `401` missing or invalid refresh token, `403` account banned or deactivated
+
+---
+
+### GET /api/v1/auth/verify-email
+
+- **Auth**: None
+- **Query**: `?token=<verificationToken>`
+- **Response**: `200 { data: { message: "Email verified successfully" }, statusCode: 200 }`
+- **Errors**: `400` missing or invalid token, `404` token not found or already used
+
+---
+
+### POST /api/v1/auth/resend-verification
+
+- **Auth**: Required (JWT cookie) — rate-limited to **1 req/min**
+- **Body**: None
+- **Response**: `200 { data: { message: "Verification email sent" }, statusCode: 200 }`
+- **Errors**: `401` not authenticated, `429` rate limit exceeded
+
+---
+
+### GET /api/v1/auth/google
+
+- **Auth**: None
+- **Description**: Initiates Google OAuth 2.0 flow. Redirects to Google consent screen requesting `profile` and `email` scopes.
+- **Response**: `302` redirect to Google
+- **Errors**: —
+
+---
+
+### GET /api/v1/auth/google/callback
+
+- **Auth**: None (handled by Passport)
+- **Description**: Google OAuth 2.0 callback. On success, sets `access_token` and `refresh_token` cookies and redirects to `{CORS_ORIGIN}/dashboard`.
+- **Response**: `302` redirect to dashboard
+- **Errors**: `302` redirect to `/login` on failure
+
+---
+
+## USERS
+
+> All `/api/v1/users` routes require a valid JWT (`access_token` cookie).
+
+---
+
+### GET /api/v1/users/me
+
+- **Auth**: Required
+- **Body**: None
+- **Response**: `200 { data: { user: { id, email, displayName, username, avatarUrl, timezone, categories, preferredLength, planTier, strikeCount, isActive, isBanned, emailVerified, isAdmin, createdAt, updatedAt } }, statusCode: 200 }`
+- **Errors**: `401` not authenticated, `404` user not found
+
+---
+
+### GET /api/v1/users/me/stats
+
+- **Auth**: Required
+- **Body**: None
+- **Response**: `200 { data: { sessionsThisWeek, focusHoursThisWeek, currentStreak, sessionsUsedThisWeek, sessionLimit, planTier }, statusCode: 200 }`
+- **Notes**: `sessionLimit` is `3` for `FREE` tier, `null` for `PRO`/`TEAM`.
+- **Errors**: `401` not authenticated, `404` user not found
+
+---
+
+### GET /api/v1/users/me/data-export
+
+- **Auth**: Required — rate-limited to **1 req/hour per user** (GDPR)
+- **Body**: None
+- **Response**: `200` JSON file download (`Content-Disposition: attachment; filename="focusup-data-export-YYYY-MM-DD.json"`) containing `{ user, sessions, reflections, reports, bookingRequests }`. `passwordHash` is always excluded.
+- **Errors**: `401` not authenticated, `429` rate limit exceeded (once per hour)
+
+---
+
+### GET /api/v1/users/me/partners
+
+- **Auth**: Required
+- **Query**: `?page=1&limit=10`
+- **Response**: `200 { data: { partners: [{ id, displayName, username, avatarUrl, lastSessionDate, totalSessionsTogether }] }, total, page, totalPages }`
+- **Notes**: Returns unique partners from `COMPLETED` sessions only. Blocked users are excluded. Ordered by most recent session descending.
+- **Errors**: `401` not authenticated
+
+---
+
+### PATCH /api/v1/users/me/onboarding
+
+- **Auth**: Required
+- **Body**: `{ timezone: string, categories: Category[] (min 1), preferredLength: number[] (min 1) }`
+- **Response**: `200 { data: { user: { ...safeUser } }, statusCode: 200 }`
+- **Errors**: `400` validation failure, `401` not authenticated, `404` user not found
+
+---
+
+## SESSIONS
+
+> All `/api/v1/sessions` routes require a valid JWT.
+
+---
+
+### GET /api/v1/sessions/token/:sessionId
+
+- **Auth**: Required
+- **Params**: `sessionId` — cuid of the session
+- **Response**: `200 { data: { token: string }, statusCode: 200 }` — LiveKit JWT (expires in 2 hours)
+- **Notes**: Token is generated server-side only. User must be `user1` or `user2` of the session. Session must be in `CONFIRMED` or `ACTIVE` status.
+- **Errors**: `401` not authenticated, `403` not a participant or session not joinable, `404` session not found, `500` LiveKit credentials not configured
+
+---
+
+### PATCH /api/v1/sessions/goal/:sessionId
+
+- **Auth**: Required
+- **Params**: `sessionId`
+- **Body**: `{ goal: string (max 200 chars) }`
+- **Response**: `200 { data: { ...updatedSession }, statusCode: 200 }`
+- **Errors**: `400` missing/invalid goal or exceeds 200 chars, `401` not authenticated, `403` not a participant, `404` session not found
+
+---
+
+### PATCH /api/v1/sessions/join/:sessionId
+
+- **Auth**: Required
+- **Params**: `sessionId`
+- **Body**: None
+- **Response**: `200 { data: { session, isActive: boolean }, statusCode: 200 }`
+- **Notes**: Tracks join state in Redis. When both participants have joined, session status transitions to `ACTIVE` and `startedAt` is set.
+- **Errors**: `400` session cannot be joined in current state, `401` not authenticated, `403` not a participant, `404` session not found
+
+---
+
+### PATCH /api/v1/sessions/complete/:sessionId
+
+- **Auth**: Required
+- **Params**: `sessionId`
+- **Body**: None
+- **Response**: `200 { data: { session, message: "Session completed" }, statusCode: 200 }`
+- **Notes**: Only `ACTIVE` sessions can be completed. Idempotent — already-completed sessions return the existing record. Cleans up Redis join-tracking key.
+- **Errors**: `400` session not in `ACTIVE` state, `401` not authenticated, `403` not a participant, `404` session not found
+
+---
+
+### GET /api/v1/sessions/status/:sessionId
+
+- **Auth**: Required
+- **Params**: `sessionId`
+- **Response**: `200 { data: { session: { ...session, user1: {...}, user2: {...} } }, statusCode: 200 }`
+- **Errors**: `401` not authenticated, `403` not a participant, `404` session not found
+
+---
+
+### GET /api/v1/sessions/upcoming
+
+- **Auth**: Required
+- **Body**: None
+- **Response**: `200 { data: [{ ...session, partner: { id, displayName, username, avatarUrl } }], statusCode: 200 }`
+- **Notes**: Returns sessions with `scheduledAt` within the next 7 days and status in `PENDING`, `CONFIRMED`, or `ACTIVE`, ordered ascending by `scheduledAt`.
+- **Errors**: `401` not authenticated
+
+---
+
+### GET /api/v1/sessions/history
+
+- **Auth**: Required
+- **Query**: `?page=1&limit=10`
+- **Response**: `200 { data: [{ ...session, partner, reflectionSnippet }], total, page, totalPages, statusCode: 200 }`
+- **Notes**: Returns sessions with status `COMPLETED`, `CANCELLED`, or `NO_SHOW`. `reflectionSnippet` is the first 100 characters of the user's own reflection (if any).
+- **Errors**: `401` not authenticated
+
+---
+
+## BOOKINGS
+
+> All `/api/v1/bookings` routes require a valid JWT.  
+> Booking creation is rate-limited to **10 req/min per user** (applied at the app level).
+
+---
+
+### POST /api/v1/bookings
+
+- **Auth**: Required
+- **Body**: `{ slotTime: string (ISO 8601 datetime), durationMin: 25 | 50 | 75 }`
+- **Response**: `201 { data: { bookingRequest | session }, statusCode: 201 }`
+- **Notes**: Attempts immediate matching against an existing compatible pending booking. If matched, a `Session` is created and both booking requests are resolved. If no match, a `BookingRequest` is stored as `PENDING`. Slot times are quantised to 15-minute increments.
+- **Errors**: `400` validation failure (invalid datetime, unsupported duration), `401` not authenticated, `409` duplicate booking for same slot
+
+---
+
+### GET /api/v1/bookings
+
+- **Auth**: Required
+- **Query**: `?status=PENDING|MATCHED|CANCELLED&page=1&limit=10`
+- **Response**: `200 { data: [...bookingRequests], total, page, totalPages, statusCode: 200 }`
+- **Errors**: `401` not authenticated
+
+---
+
+### GET /api/v1/bookings/available
+
+- **Auth**: Required
+- **Query**: `?date=<ISO datetime>&days=3`
+- **Response**: `200 { data: [...availableSlots], statusCode: 200 }`
+- **Notes**: Returns pending booking requests from other users that are compatible with the caller (no blocks, matching duration). Useful for displaying a calendar of joinable slots. Defaults: `date` = now, `days` = 3.
+- **Errors**: `401` not authenticated
+
+---
+
+### DELETE /api/v1/bookings/:id
+
+- **Auth**: Required
+- **Params**: `id` — booking request cuid
+- **Response**: `200 { data: { ...cancelledBookingRequest }, statusCode: 200 }`
+- **Errors**: `401` not authenticated, `403` not the owner of this booking request, `404` booking request not found, `409` already matched or cancelled
+
+---
+
+## REFLECTIONS
+
+> Reflections are submitted via the Sessions domain.
+
+---
+
+### POST /api/v1/sessions/reflections
+
+- **Auth**: Required
+- **Body**: `{ sessionId: string (cuid), text: string (min 1, max 1000), rating?: number (1–5) }`
+- **Response**: `200 { data: { id, sessionId, userId, text, rating, createdAt }, statusCode: 200 }`
+- **Notes**: Session must be `COMPLETED`. Each user may only submit one reflection per session. Text is sanitized server-side via `sanitize-html`.
+- **Errors**: `400` missing fields, text too long, rating out of range, session not completed, `401` not authenticated, `403` not a participant, `404` session not found, `409` reflection already submitted
+
+---
+
+## REPORTS
+
+> All `/api/v1/reports` routes require a valid JWT.  
+> Report creation is rate-limited to **5 req/min per user** (applied at the app level).
+
+---
+
+### POST /api/v1/reports
+
+- **Auth**: Required
+- **Body**: `{ reportedId: string (cuid), sessionId?: string (cuid), reason: "NO_SHOW" | "INAPPROPRIATE" | "HARASSMENT" | "SPAM" | "OTHER", description?: string }`
+- **Response**: `201 { data: { report: { id, reporterId, reportedId, sessionId, reason, description, status, createdAt } }, statusCode: 201 }`
+- **Errors**: `400` validation failure, `401` not authenticated, `404` reported user not found, `409` duplicate report for the same session
+
+---
+
+### GET /api/v1/reports
+
+- **Auth**: Required
+- **Body**: None
+- **Response**: `200 { data: { reports: [...] }, statusCode: 200 }`
+- **Notes**: Returns only reports submitted **by** the authenticated user.
+- **Errors**: `401` not authenticated
+
+---
+
+## BLOCKS
+
+> All `/api/v1/blocks` routes require a valid JWT.
+
+---
+
+### POST /api/v1/blocks
+
+- **Auth**: Required
+- **Body**: `{ blockedId: string (cuid) }`
+- **Response**: `201 { data: { success: true }, statusCode: 201 }`
+- **Notes**: Blocking a user prevents them from being matched together and hides them from partner lists. Idempotent — re-blocking an already-blocked user is a no-op.
+- **Errors**: `400` validation failure, `401` not authenticated, `404` target user not found
+
+---
+
+### DELETE /api/v1/blocks/:blockedId
+
+- **Auth**: Required
+- **Params**: `blockedId` — cuid of the user to unblock
+- **Response**: `200 { data: { ...result }, statusCode: 200 }`
+- **Errors**: `401` not authenticated, `404` block relationship not found
+
+---
+
+### GET /api/v1/blocks
+
+- **Auth**: Required
+- **Body**: None
+- **Response**: `200 { data: { blocks: [{ id, blockerId, blockedId, createdAt, ... }] }, statusCode: 200 }`
+- **Notes**: Returns all users blocked **by** the authenticated user.
+- **Errors**: `401` not authenticated
+
+---
+
+## NOTIFICATIONS
+
+> All `/api/v1/notifications` routes require a valid JWT.  
+> Real-time notifications are delivered over WebSocket; REST endpoints manage notification state.
+
+---
+
+> **Status**: Notification REST endpoints are scaffolded and will be expanded in a future sprint. The controller currently returns a placeholder response.
+
+---
+
+## ADMIN
+
+> All `/api/v1/admin` routes require a valid JWT **and** `isAdmin: true`.  
+> Admin middleware chain: `authMiddleware` → `requireAuth` → `requireAdmin`.
+
+---
+
+### GET /api/v1/admin/reports
+
+- **Auth**: Required + Admin
+- **Query**: `?status=OPEN|REVIEWED|RESOLVED|DISMISSED&reason=NO_SHOW|INAPPROPRIATE|HARASSMENT|SPAM|OTHER&page=1&limit=10`
+- **Response**: `200 { data: { reports: [...], total, page, totalPages }, statusCode: 200 }`
+- **Notes**: Returns all reports across all users. Supports filtering by `status` and `reason`.
+- **Errors**: `401` not authenticated, `403` not an admin
+
+---
+
+### PATCH /api/v1/admin/reports/:id
+
+- **Auth**: Required + Admin
+- **Params**: `id` — report cuid
+- **Body**: `{ status: "OPEN" | "REVIEWED" | "RESOLVED" | "DISMISSED" }`
+- **Response**: `200 { data: { report: { ...updatedReport } }, statusCode: 200 }`
+- **Errors**: `400` invalid status value, `401` not authenticated, `403` not an admin, `404` report not found
+
+---
+
+### GET /api/v1/admin/users/:id
+
+- **Auth**: Required + Admin
+- **Params**: `id` — user cuid
+- **Response**: `200 { data: { user: { ...fullUserRecord } }, statusCode: 200 }`
+- **Notes**: Returns full user details including `strikeCount`, `isBanned`, `isActive`, and related data.
+- **Errors**: `401` not authenticated, `403` not an admin, `404` user not found
+
+---
+
+### PATCH /api/v1/admin/users/:id/ban
+
+- **Auth**: Required + Admin
+- **Params**: `id` — user cuid
+- **Body**: None
+- **Response**: `200 { data: { ...result }, statusCode: 200 }`
+- **Notes**: Sets `isBanned: true`. Banned users receive `403` on all protected routes.
+- **Errors**: `401` not authenticated, `403` not an admin, `404` user not found, `409` user already banned
+
+---
+
+### PATCH /api/v1/admin/users/:id/unban
+
+- **Auth**: Required + Admin
+- **Params**: `id` — user cuid
+- **Body**: None
+- **Response**: `200 { data: { ...result }, statusCode: 200 }`
+- **Notes**: Sets `isBanned: false`.
+- **Errors**: `401` not authenticated, `403` not an admin, `404` user not found
+
+---
+
+### PATCH /api/v1/admin/users/:id/strike
+
+- **Auth**: Required + Admin
+- **Params**: `id` — user cuid
+- **Body**: `{ reason: string (min 1) }`
+- **Response**: `200 { data: { ...result }, statusCode: 200 }`
+- **Notes**: Increments `strikeCount`. When `strikeCount` reaches the threshold (3 by default), the user may be auto-banned depending on service logic.
+- **Errors**: `400` missing reason, `401` not authenticated, `403` not an admin, `404` user not found
+
+---
+
+## WEBHOOKS
+
+> Webhook routes are **exempt** from the general API rate limiter (`generalLimiter` skips paths starting with `/api/webhooks`).  
+> Stripe webhook signature verification is applied before any payload processing.
+
+---
+
+> **Status**: Webhook endpoints are scaffolded for future Stripe integration. No active routes at this time.
+
+---
+
+## HEALTH
+
+> Health check endpoint is public and sits outside the `/api/v1` router.
+
+---
+
+### GET /api/health
+
+- **Auth**: None
+- **Body**: None
+- **Response**: `200 { status: "ok", timestamp: string (ISO 8601), queues?: { "session-noshow": JobCounts, "session-reminder": JobCounts, "booking-expiry": JobCounts } }`
+- **Notes**: Also reports BullMQ queue depths for `session-noshow`, `session-reminder`, and `booking-expiry`. If Redis/queues are unavailable, `queues` is omitted rather than failing the health check.
+- **Errors**: —
+
+---
+
+## Rate Limiting Summary
+
+| Scope | Limiter | Window | Max (prod) | Max (test) | Key |
+|---|---|---|---|---|---|
+| `/api/v1/auth` | `authLimiter` | 1 min | 5 | 100 | IP |
+| `/api/v1/auth/resend-verification` | `resendLimiter` | 1 min | 1 | 10 | IP |
+| `/api/v1/users/me/data-export` | `dataExportLimiter` | 60 min | 1 | 100 | IP |
+| `/api/v1/bookings` | `bookingLimiter` | 1 min | 10 | 100 | User ID → IP |
+| `/api/v1/reports` | `reportLimiter` | 1 min | 5 | 100 | User ID → IP |
+| `/api/v1` (general) | `generalLimiter` | 1 min | 100 | 1000 | User ID → IP |
+
+> **Key fallback**: User-keyed limiters resolve `req.user.id` first; if unavailable (unauthenticated request), they fall back to `req.ip`, then `"unknown"`.  
+> **Webhook exemption**: The `generalLimiter` skips all requests whose path starts with `/api/webhooks`.
+
+---
+
+## Common Error Codes
+
+| Code | Meaning |
+|---|---|
+| `400` | Validation failure — check `details` for field-level Zod errors |
+| `401` | Missing, invalid, or expired `access_token`; or `refresh_token` on the refresh endpoint |
+| `403` | Authenticated but forbidden — banned account, deactivated account, or insufficient role |
+| `404` | Resource not found |
+| `409` | Conflict — duplicate resource (email/username taken, reflection already submitted, etc.) |
+| `429` | Rate limit exceeded |
+| `500` | Internal server error — check server logs |
+
+---
+
+## Auth Flow Reference
+
+```
+POST /auth/register  →  201 + set cookies
+POST /auth/login     →  200 + set cookies
+POST /auth/refresh   →  200 + rotate cookies   (triggered automatically by client on 401)
+POST /auth/logout    →  200 + clear cookies
+GET  /auth/google    →  302 → Google
+GET  /auth/google/callback  →  302 → /dashboard + set cookies
+```
+
+Tokens live exclusively in httpOnly, Secure, SameSite=Strict cookies — never in `localStorage` or response bodies.
+
+---
+
+*Last updated: P3-19 — reflects codebase state as of the P3 sprint.*

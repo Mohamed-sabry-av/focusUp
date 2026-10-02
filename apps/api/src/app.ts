@@ -45,8 +45,8 @@ app.use(
 app.use(passport.initialize());
 
 const authLimiter = rateLimit({
-  windowMs: 1 * 60 * 1000, // 1 minute window
-  max: env.NODE_ENV === "test" ? 100 : 5, // max 5 requests per 1 minute window per IP
+  windowMs: 1 * 60 * 1000,
+  max: env.NODE_ENV === "test" ? 100 : 5,
   message: {
     error: "Too many requests, please try again later.",
     statusCode: 429,

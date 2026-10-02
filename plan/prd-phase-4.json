@@ -1,0 +1,340 @@
+{
+  "phase": "Phase 4 — Solidification & Production Readiness",
+  "description": "Connect all frontend to real backend APIs, implement settings persistence, public profiles, Resend email templates, mobile polish, notification system, direct booking flow, and production hardening.",
+  "estimated_iterations": "20-28",
+  "run_mode": "AFK-safe for most tasks. HITL recommended for P4-03 (preferences schema), P4-06 (email), P4-20 (deploy).",
+  "prerequisites": "Phase 1, 2, 3 complete. Dashboard UI built. Workers running. Rate limiting active.",
+  "items": [
+    {
+      "id": "P4-01",
+      "category": "functional",
+      "priority": 1,
+      "title": "PATCH /api/users/me — Update Profile",
+      "description": "Allow users to update displayName, timezone, and username from Settings > Account tab.",
+      "steps": [
+        "PATCH /api/users/me accepts { displayName?, username?, timezone? }",
+        "Validate: displayName min 2 chars, username min 3 chars alphanumeric+dash+underscore, timezone valid IANA string",
+        "Username uniqueness check — 409 if taken by another user",
+        "Settings > Account tab: Name row → pencil icon opens inline edit with Save/Cancel",
+        "Settings > Account tab: Timezone → select dropdown with common timezones",
+        "On save: toast 'Profile updated', invalidate ['currentUser'] React Query cache",
+        "npm run typecheck passes"
+      ],
+      "passes": false
+    },
+    {
+      "id": "P4-02",
+      "category": "functional",
+      "priority": 2,
+      "title": "Avatar Upload — POST /api/users/me/avatar",
+      "description": "Allow users to upload a profile picture stored on the server.",
+      "steps": [
+        "POST /api/users/me/avatar accepts multipart/form-data with field 'avatar'",
+        "Validate: image/jpeg, image/png, image/webp, max 5MB",
+        "Resize image to 200x200px using sharp package",
+        "Store in apps/api/public/avatars/{userId}.jpg, serve as /avatars/*",
+        "Update user.avatarUrl = '/avatars/{userId}.jpg'",
+        "Frontend: avatar in Settings > Account clickable to upload",
+        "After upload: invalidate ['currentUser'] cache",
+        "npm run typecheck passes"
+      ],
+      "passes": false
+    },
+    {
+      "id": "P4-03",
+      "category": "functional",
+      "priority": 1,
+      "title": "User Preferences Schema & API",
+      "description": "Add UserPreferences model to store notification and matching preferences persistently.",
+      "steps": [
+        "Add UserPreferences model to Prisma schema (new migration)",
+        "Fields: googleCalendarSync, emailCalendarInvites, performanceReports, desktopNotifications, quietMode, preferFavorites, timeFormat, weekStartsOn, autoRematch, mutedOnJoin, availability",
+        "GET /api/users/me/preferences — returns prefs (creates defaults on first call)",
+        "PATCH /api/users/me/preferences — updates any subset of fields",
+        "useUserPreferences() hook fetches and caches preferences",
+        "Settings > Notifications tab: each toggle calls PATCH /api/users/me/preferences",
+        "Settings > Preferences tab: each edit row reads from prefs",
+        "npm run typecheck passes"
+      ],
+      "passes": false
+    },
+    {
+      "id": "P4-04",
+      "category": "functional",
+      "priority": 2,
+      "title": "Public Profile Page — /profile/[username]",
+      "description": "Public profile page with stats and 'Book a Session' CTA.",
+      "steps": [
+        "GET /api/users/:username/profile — public fields only (never passwordHash, email, strikeCount)",
+        "Returns: id, displayName, username, avatarUrl, categories, createdAt, totalCompletedSessions, currentStreak",
+        "404 if user not found, banned, or inactive",
+        "Frontend: /profile/[username]/page.tsx — avatar, name, categories, stats, 'Book a Focus Session' button",
+        "'Book' button opens DirectBookingModal (P4-05)",
+        "Own profile: shows 'Edit Profile' button",
+        "npm run typecheck passes"
+      ],
+      "passes": false
+    },
+    {
+      "id": "P4-05",
+      "category": "functional",
+      "priority": 2,
+      "title": "Direct Partner Booking — POST /api/sessions/direct",
+      "description": "Book a session directly with a specific partner from their profile.",
+      "steps": [
+        "POST /api/sessions/direct: { partnerId, slotTime, durationMin }",
+        "Validations: future slotTime, 15-min boundary, durationMin in {25,50,75}",
+        "Block check both directions → 403",
+        "Free tier + email verification check",
+        "Overlap check for BOTH users",
+        "Creates Session with status=CONFIRMED, schedules jobs, sends emails + WebSocket",
+        "Frontend: DirectBookingModal on /profile/[username]",
+        "npm run typecheck passes"
+      ],
+      "passes": false
+    },
+    {
+      "id": "P4-06",
+      "category": "functional",
+      "priority": 1,
+      "title": "Resend Email Templates — All Transactional Emails",
+      "description": "Implement all email templates with Resend SDK. Replace all console.log stubs.",
+      "steps": [
+        "Install Resend SDK: bun add resend",
+        "Add RESEND_API_KEY to packages/env/src/server.ts",
+        "Templates: Welcome/Verification, Booking confirmation, Reminder 24h, Partner no-show, Strike warning, Ban notification, Booking expired, Password reset",
+        "All emails: responsive HTML, #0245A3 branding, unsubscribe footer",
+        "npm run typecheck passes"
+      ],
+      "passes": false
+    },
+    {
+      "id": "P4-07",
+      "category": "functional",
+      "priority": 1,
+      "title": "My Schedule Page — Upcoming + Past Sessions",
+      "description": "Full schedule view with Upcoming/Past tabs and session management.",
+      "steps": [
+        "Dashboard Schedule tab (calendar icon on mobile): shows My Schedule",
+        "Upcoming sub-tab: sessions grouped by date, Join button 5min before, Cancel (×), menu (...)",
+        "Past sub-tab: grouped by date, status badge, expandable reflection snippet",
+        "Connects to GET /api/sessions/upcoming and GET /api/sessions/history",
+        "WebSocket 'session:confirmed' refreshes upcoming list",
+        "npm run typecheck passes"
+      ],
+      "passes": false
+    },
+    {
+      "id": "P4-08",
+      "category": "functional",
+      "priority": 2,
+      "title": "Favorites Schedule Page",
+      "description": "Show scheduled sessions with frequent partners, filtered by duration.",
+      "steps": [
+        "Dashboard Favorites (star) tab: shows Favorites Schedule",
+        "Filter bar: All | 25m | 50m | 75m | Quiet [toggle] | Refresh",
+        "Shows sessions with top partners over next 5 days",
+        "Empty state if none",
+        "npm run typecheck passes"
+      ],
+      "passes": false
+    },
+    {
+      "id": "P4-09",
+      "category": "functional",
+      "priority": 1,
+      "title": "In-App Notification Center",
+      "description": "Persistent notification center with unread count badge.",
+      "steps": [
+        "Add Notification model to Prisma schema",
+        "Fields: id, userId, type (enum), title, body, isRead (default false), metadata JSON?, createdAt",
+        "Update NotificationService to also persist to DB",
+        "GET /api/notifications — paginated, newest first",
+        "GET /api/notifications/unread-count",
+        "PATCH /api/notifications/:id/read",
+        "PATCH /api/notifications/read-all",
+        "Frontend: bell icon in right panel header with unread count badge",
+        "Clicking opens Sheet with notification list",
+        "WebSocket 'notification:new' updates badge",
+        "npm run typecheck passes"
+      ],
+      "passes": false
+    },
+    {
+      "id": "P4-10",
+      "category": "functional",
+      "priority": 2,
+      "title": "Session Room Report Modal",
+      "description": "Add Report button to session room controls.",
+      "steps": [
+        "Session room: Report button (flag icon, red) in controls bar",
+        "Opens Dialog with reason dropdown + optional description textarea",
+        "POST /api/reports: { reportedId: partnerId, sessionId, reason, description }",
+        "Success: toast, modal closes, session continues",
+        "npm run typecheck passes"
+      ],
+      "passes": false
+    },
+    {
+      "id": "P4-11",
+      "category": "functional",
+      "priority": 2,
+      "title": "Onboarding Flow — First-Time User",
+      "description": "Guided 5-step onboarding after email verification.",
+      "steps": [
+        "After email verification → redirect to /onboarding",
+        "Step 1: Welcome. Step 2: Timezone (auto-detect). Step 3: Categories. Step 4: Session lengths. Step 5: Avatar (optional)",
+        "Progress bar showing steps 1-5",
+        "PATCH /api/users/me/onboarding on complete",
+        "On complete: redirect to /dashboard with confetti",
+        "Skip if already onboarded (categories.length > 0)",
+        "npm run typecheck passes"
+      ],
+      "passes": false
+    },
+    {
+      "id": "P4-12",
+      "category": "functional",
+      "priority": 3,
+      "title": "Change Password & Password Reset Flow",
+      "description": "Change password from settings + forgot password email flow.",
+      "steps": [
+        "POST /api/auth/change-password: { currentPassword, newPassword }",
+        "POST /api/auth/forgot-password: { email } → sends reset email",
+        "POST /api/auth/reset-password: { token, newPassword }",
+        "Frontend: Settings > Account change password modal",
+        "Forgot password link on /login",
+        "npm run typecheck passes"
+      ],
+      "passes": false
+    },
+    {
+      "id": "P4-13",
+      "category": "functional",
+      "priority": 2,
+      "title": "Session Reflection — End-to-End",
+      "description": "Ensure reflection modal works and reflections show in history.",
+      "steps": [
+        "After session completes: reflection modal appears automatically",
+        "Text area + 1-5 star rating + Skip/Save",
+        "POST /api/sessions/reflections creates record",
+        "Session history shows reflection snippet with stars",
+        "Reflection editable within 24h",
+        "npm run typecheck passes"
+      ],
+      "passes": false
+    },
+    {
+      "id": "P4-14",
+      "category": "functional",
+      "priority": 2,
+      "title": "Mobile App — Full Responsive Polish",
+      "description": "Every screen works perfectly on mobile (375px+).",
+      "steps": [
+        "Dashboard calendar: full-height scroll, no overflow bleed",
+        "Bottom nav: 4 tabs with active state, 44px touch targets",
+        "Session room mobile: all controls accessible",
+        "Auth pages: keyboard-aware, no content hidden",
+        "All modals/sheets: full-width with safe area insets (pb-safe)",
+        "No hover-only interactions",
+        "npm run typecheck passes"
+      ],
+      "passes": false
+    },
+    {
+      "id": "P4-15",
+      "category": "functional",
+      "priority": 3,
+      "title": "Google OAuth — Complete Integration",
+      "description": "Google OAuth login/register flow end-to-end.",
+      "steps": [
+        "New Google user: create account, generate username, skip email verification, go to onboarding",
+        "Existing Google user: log in, go to dashboard",
+        "Google button on /login and /register",
+        "npm run typecheck passes"
+      ],
+      "passes": false
+    },
+    {
+      "id": "P4-16",
+      "category": "functional",
+      "priority": 2,
+      "title": "Upcoming Sessions — Working Join + Cancel",
+      "description": "BookingPanel upcoming section has live Join/Cancel buttons.",
+      "steps": [
+        "Join button: appears 5min before session, navigates to /session/{id}",
+        "Cancel (×): calls DELETE /api/bookings/:id, removes from list",
+        "WebSocket 'session:confirmed' adds new session to list",
+        "npm run typecheck passes"
+      ],
+      "passes": false
+    },
+    {
+      "id": "P4-17",
+      "category": "functional",
+      "priority": 1,
+      "title": "Calendar Multi-Select Booking — Full Flow",
+      "description": "Calendar hover/click/Book/Clear UX fully functional with real API calls.",
+      "steps": [
+        "Hover → user avatar + duration preview block",
+        "Click → Book (blue top) + Clear (bottom) inline overlay",
+        "Click Book → slot added to Selected list in left panel, queued block shown in calendar",
+        "Book N sessions (bottom bar) → POST /api/bookings per slot, toast on success/fail",
+        "npm run typecheck passes"
+      ],
+      "passes": false
+    },
+    {
+      "id": "P4-18",
+      "category": "functional",
+      "priority": 2,
+      "title": "Settings — All Tabs Fully Wired to Backend",
+      "description": "Every setting reads from and writes to the API.",
+      "steps": [
+        "Notifications tab: all toggles PATCH /api/users/me/preferences",
+        "Preferences tab: Quiet Mode, Prefer Favorites, Dark Mode PATCH preferences",
+        "Account tab: Name/Timezone inline edit PATCH /api/users/me",
+        "Account tab: Change Password modal",
+        "Account tab: Delete Account with 'Type DELETE' confirmation",
+        "All settings: toast feedback on save/error",
+        "On load: useUserPreferences() + useCurrentUser() provide values",
+        "npm run typecheck passes"
+      ],
+      "passes": false
+    },
+    {
+      "id": "P4-19",
+      "category": "security",
+      "priority": 1,
+      "title": "Delete Account — GDPR Anonymization",
+      "description": "Soft-delete / anonymize user data on account deletion.",
+      "steps": [
+        "DELETE /api/users/me — anonymizes: email, displayName, username, passwordHash=null, avatarUrl=null, isActive=false",
+        "Keep sessions/reflections (for partner history), cancel pending bookings",
+        "Send confirmation email",
+        "Frontend: Settings > Account 'Delete account' → confirmation dialog with 'Type DELETE'",
+        "After deletion: redirect to /login with toast",
+        "npm run typecheck passes"
+      ],
+      "passes": false
+    },
+    {
+      "id": "P4-20",
+      "category": "infrastructure",
+      "priority": 3,
+      "title": "Production Deployment Readiness",
+      "description": "Prepare for production deployment.",
+      "steps": [
+        "Audit all .env.example files, document all required vars",
+        "Add Bull-Board queue monitor at /admin/queues (admin-only)",
+        "Replace console.log with structured logging (pino)",
+        "Dockerfile for API, docker-compose.prod.yml",
+        "GitHub Actions: typecheck + test on PR",
+        "Sentry integration for error monitoring (API + web)",
+        "Health check endpoint returns DB + Redis + queue status",
+        "npm run typecheck passes"
+      ],
+      "passes": false
+    }
+  ]
+}

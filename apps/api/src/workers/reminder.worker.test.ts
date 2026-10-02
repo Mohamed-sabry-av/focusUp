@@ -22,25 +22,29 @@ vi.mock("bullmq", () => ({
 vi.mock("../queues/connection", () => ({ connection: {} }));
 
 // ── Prisma ──────────────────────────────────────────────────────────────────
-const mockPrisma = {
-  session: {
-    findUnique: vi.fn(),
-  },
-};
+const { mockPrisma, mockNotificationService, mockEmailService } = vi.hoisted(
+  () => ({
+    mockPrisma: {
+      session: {
+        findUnique: vi.fn(),
+      },
+    },
+    mockNotificationService: {
+      notifySessionReminder: vi.fn(),
+    },
+    mockEmailService: {
+      sendSessionReminder: vi.fn(),
+    },
+  }),
+);
 vi.mock("../lib/prisma", () => ({ prisma: mockPrisma }));
 
 // ── NotificationService ─────────────────────────────────────────────────────
-const mockNotificationService = {
-  notifySessionReminder: vi.fn(),
-};
 vi.mock("../services/notification.service", () => ({
   NotificationService: mockNotificationService,
 }));
 
 // ── EmailService ────────────────────────────────────────────────────────────
-const mockEmailService = {
-  sendSessionReminder: vi.fn(),
-};
 vi.mock("../services/email.service", () => ({
   EmailService: mockEmailService,
 }));
@@ -113,7 +117,9 @@ describe("processReminderJob", () => {
 
     await processReminderJob(makeJob({ sessionId: "sess-001", type: "24h" }));
 
-    expect(mockNotificationService.notifySessionReminder).not.toHaveBeenCalled();
+    expect(
+      mockNotificationService.notifySessionReminder,
+    ).not.toHaveBeenCalled();
     expect(mockEmailService.sendSessionReminder).not.toHaveBeenCalled();
   });
 
@@ -125,7 +131,9 @@ describe("processReminderJob", () => {
 
     await processReminderJob(makeJob({ sessionId: "sess-001", type: "24h" }));
 
-    expect(mockNotificationService.notifySessionReminder).not.toHaveBeenCalled();
+    expect(
+      mockNotificationService.notifySessionReminder,
+    ).not.toHaveBeenCalled();
     expect(mockEmailService.sendSessionReminder).not.toHaveBeenCalled();
   });
 
@@ -137,7 +145,9 @@ describe("processReminderJob", () => {
 
     await processReminderJob(makeJob({ sessionId: "sess-001", type: "24h" }));
 
-    expect(mockNotificationService.notifySessionReminder).not.toHaveBeenCalled();
+    expect(
+      mockNotificationService.notifySessionReminder,
+    ).not.toHaveBeenCalled();
     expect(mockEmailService.sendSessionReminder).not.toHaveBeenCalled();
   });
 
@@ -149,7 +159,9 @@ describe("processReminderJob", () => {
 
     await processReminderJob(makeJob({ sessionId: "sess-001", type: "24h" }));
 
-    expect(mockNotificationService.notifySessionReminder).not.toHaveBeenCalled();
+    expect(
+      mockNotificationService.notifySessionReminder,
+    ).not.toHaveBeenCalled();
     expect(mockEmailService.sendSessionReminder).not.toHaveBeenCalled();
   });
 
@@ -163,7 +175,9 @@ describe("processReminderJob", () => {
     await processReminderJob(makeJob({ sessionId: "sess-001", type: "24h" }));
 
     // WebSocket notification sent once with the full session + type
-    expect(mockNotificationService.notifySessionReminder).toHaveBeenCalledTimes(1);
+    expect(mockNotificationService.notifySessionReminder).toHaveBeenCalledTimes(
+      1,
+    );
     expect(mockNotificationService.notifySessionReminder).toHaveBeenCalledWith(
       session,
       "24h",
@@ -216,7 +230,9 @@ describe("processReminderJob", () => {
 
     await processReminderJob(makeJob({ sessionId: "sess-001", type: "5min" }));
 
-    expect(mockNotificationService.notifySessionReminder).toHaveBeenCalledTimes(1);
+    expect(mockNotificationService.notifySessionReminder).toHaveBeenCalledTimes(
+      1,
+    );
     expect(mockNotificationService.notifySessionReminder).toHaveBeenCalledWith(
       session,
       "5min",
@@ -233,7 +249,9 @@ describe("processReminderJob", () => {
     await processReminderJob(makeJob({ sessionId: "sess-001", type: "5min" }));
 
     // ACTIVE is not in the skip list — reminder must go through
-    expect(mockNotificationService.notifySessionReminder).toHaveBeenCalledTimes(1);
+    expect(mockNotificationService.notifySessionReminder).toHaveBeenCalledTimes(
+      1,
+    );
     expect(mockNotificationService.notifySessionReminder).toHaveBeenCalledWith(
       session,
       "5min",
@@ -250,7 +268,9 @@ describe("processReminderJob", () => {
     await processReminderJob(makeJob({ sessionId: "sess-001", type: "24h" }));
 
     // PENDING is not in the skip list — reminder must go through
-    expect(mockNotificationService.notifySessionReminder).toHaveBeenCalledTimes(1);
+    expect(mockNotificationService.notifySessionReminder).toHaveBeenCalledTimes(
+      1,
+    );
     expect(mockNotificationService.notifySessionReminder).toHaveBeenCalledWith(
       session,
       "24h",
