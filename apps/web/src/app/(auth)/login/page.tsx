@@ -10,7 +10,9 @@ import { z } from "zod";
 import { Eye, EyeOff, Loader2 } from "lucide-react";
 import { cn } from "@focusUp/ui/lib/utils";
 import { toast } from "sonner";
+import type { Route } from "next";
 import { authClient, webUrl } from "@/lib/auth-client";
+import { safeRedirectPath } from "@/lib/safe-redirect";
 import { zodErrorToFieldErrors } from "@/lib/zod-field-errors";
 
 type LoginFormValues = z.infer<typeof LoginInput>;
@@ -47,7 +49,8 @@ export default function LoginPage() {
     },
     onSuccess: () => {
       toast.success("Welcome back!");
-      router.push("/dashboard");
+      const next = new URLSearchParams(window.location.search).get("next");
+      router.push(safeRedirectPath(next) as Route);
     },
     onError: (error) => {
       setServerError(error.message);
@@ -196,12 +199,12 @@ export default function LoginPage() {
                   >
                     Password
                   </label>
-                  <a
+                  <Link
                     className="text-xs font-bold text-[#003076] hover:underline transition-all"
-                    href="#"
+                    href="/forgot-password"
                   >
                     Forgot password?
-                  </a>
+                  </Link>
                 </div>
                 <div className="relative group transition-all">
                   <input
