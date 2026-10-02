@@ -53,6 +53,8 @@ Client code uses `authClient` from `apps/web/src/lib/auth-client.ts`; the table 
 
 `/api/v1` routes use the session through `authMiddleware`. These routes also require a **verified email** (`403 "Please verify your email first"`): `POST /bookings`, `GET /sessions/:sessionId/token` (and the old `GET /sessions/token/:sessionId`), `PATCH /sessions/join/:sessionId`. Google sign-ups count as verified.
 
+**Development only:** with `SKIP_EMAIL_VERIFICATION=true` in `.env`, new accounts start verified and no verification email is sent (useful until an email provider is set up). The server refuses to start in production with it on.
+
 A banned or deactivated user gets `403` on every `/api/v1` route straight away, and cannot start a new session.
 
 ---

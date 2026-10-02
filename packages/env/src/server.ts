@@ -34,6 +34,13 @@ export const env = createEnv({
     LIVEKIT_API_KEY: z.string().min(1),
     LIVEKIT_API_SECRET: z.string().min(32),
 
+    // Development only: new accounts start verified and no verification email is sent, for
+    // when there is no email provider yet. Refused in production (see below).
+    SKIP_EMAIL_VERIFICATION: z
+      .enum(["true", "false"])
+      .default("false")
+      .transform((value) => value === "true"),
+
     // Email. Without a key, emails are logged (development and test only).
     RESEND_API_KEY: z.string().min(1).optional(),
     EMAIL_FROM: z.string().min(3).default("FocusUp <no-reply@localhost>"),
@@ -42,6 +49,13 @@ export const env = createEnv({
   emptyStringAsUndefined: true,
   createFinalSchema: (shape) =>
     z.object(shape).superRefine((value, ctx) => {
+      if (value.NODE_ENV === "production" && value.SKIP_EMAIL_VERIFICATION) {
+        ctx.addIssue({
+          code: "custom",
+          path: ["SKIP_EMAIL_VERIFICATION"],
+          message: "SKIP_EMAIL_VERIFICATION must not be enabled in production",
+        });
+      }
       if (value.NODE_ENV === "production" && !value.RESEND_API_KEY) {
         ctx.addIssue({
           code: "custom",

@@ -85,7 +85,7 @@ export function createAuth(options: CreateAuthOptions = {}) {
     },
 
     emailVerification: {
-      sendOnSignUp: true,
+      sendOnSignUp: !env.SKIP_EMAIL_VERIFICATION,
       autoSignInAfterVerification: true,
       sendVerificationEmail: async ({ user, url }) => {
         sendInBackground(
@@ -124,7 +124,9 @@ export function createAuth(options: CreateAuthOptions = {}) {
         create: {
           before: async (user) => {
             const username = await generateUniqueUsername(user.email, isUsernameTaken);
-            return { data: { ...user, username } };
+            // Development shortcut (never in production): no email provider yet.
+            const emailVerified = env.SKIP_EMAIL_VERIFICATION ? true : user.emailVerified;
+            return { data: { ...user, username, emailVerified } };
           },
         },
       },
