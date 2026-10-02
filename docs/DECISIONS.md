@@ -65,6 +65,19 @@ reminders, dashboard, admin panel and analytics events.
 | M7 | Booking limits | At most 14 days ahead and 3 upcoming bookings; no overlap with your own bookings. Cancelling a matched booking at least 1 hour ahead is free (session given back); later is a strike and still counts | — |
 | M8 | Bug fixed | A cancelled booking used to block rebooking the same slot (unique key on user, slot and duration). Replaced by an index plus a transactional overlap check | — |
 
+### Core: booking UI (U)
+
+| # | Area | Decision | Overrides |
+|---|---|---|---|
+| U1 | Booking sidebar | Follows the Focusmate layout: Book on top, Session Settings (Duration, My Task = Desk / Moving / Anything, Quiet Mode with a note, Prefer Favorites), and an "N Sessions Selected" list. Booking works from the calendar (a card per slot with Book and Clear), the sidebar Book button, and the bottom "Book N sessions" bar | — |
+| U2 | No "Now" button | Instant booking stays out of the beta (spec #10); the sidebar has no Now button | — |
+| U3 | Camera | No camera switch when booking (founder). The camera is chosen when joining the session. Bookings are stored camera-on; the backend field stays for later | Spec #12, P3 |
+| U4 | Anything / Prefer Favorites | "Anything" is a task value (`ANY`) that fits every other task; it is the default. Prefer Favorites is on by default; when off, favorites get no priority (only the requester's switch counts) | M5 |
+| U5 | Waiting people | Click adds the slot to the selection (no instant booking). Badges for Quiet and Moving, a gold ring and star for favorites, initials when the photo is hidden. Hover card has a star to favorite | — |
+| U6 | Multi-booking | One result per slot ("Matched with Layla", "Waiting for a partner", or the reason it failed); failed slots stay selected | — |
+| U7 | Suspension and strikes | Red banner and disabled Book while suspended; strike counter ("2 of 5") shown once there is a strike | — |
+| U8 | Privacy | Hide my photo (initials for others; the server never sends the photo URL) and Data saver, in Settings > Preferences. Gender row removed (deferred) | — |
+
 ### Process
 
 | # | Area | Decision |

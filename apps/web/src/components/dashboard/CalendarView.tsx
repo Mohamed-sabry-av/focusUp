@@ -11,11 +11,10 @@ import {
   MoreHorizontal,
   X,
 } from "lucide-react";
-import {
-  useAvailableBookings,
-  useCreateBooking,
-  useUserBookings,
-} from "@/hooks/useBookings";
+import { useAvailableBookings, useUserBookings } from "@/hooks/useBookings";
+import type { AvailableBooking } from "@/hooks/useBookings";
+import { buildSelectedSlot, type SelectedSlot } from "@/lib/selected-slot";
+import { WaitingPerson } from "./WaitingPersonCard";
 import { useUpcomingSessions } from "@/hooks/useSessions";
 import { useCurrentUser } from "@/hooks/useUser";
 import {
@@ -23,23 +22,17 @@ import {
   AvatarFallback,
   AvatarImage,
 } from "@focusUp/ui/components/avatar";
-import { toast } from "sonner";
-
 interface CalendarViewProps {
+  /** The duration chosen in the sidebar, used for new slots. */
   durationSelected: number;
-  taskType: string;
-  onSlotSelected?: (slot: {
-    id: string;
-    dateLabel: string;
-    timeRange: string;
-    durationMin: number;
-    slotTime: string;
-  }) => void;
-  externalSelectedSlots?: Array<{
-    id: string;
-    slotTime: string;
-    durationMin: number;
-  }>;
+  /** A time was picked (an empty slot or a waiting person): add it to the selection. */
+  onSlotSelected: (slot: SelectedSlot) => void;
+  /** Book just this slot now (the Book button on its card). */
+  onBookSlot: (slot: SelectedSlot) => void;
+  /** Take this slot off the selection (the Clear button on its card). */
+  onRemoveSlot: (id: string) => void;
+  /** Slots picked so far, drawn as cards with Book and Clear. */
+  externalSelectedSlots?: SelectedSlot[];
 }
 
 const HOUR_HEIGHT = 160;
@@ -49,8 +42,9 @@ const SLOT_HEIGHT = SLOT_MINUTES * MINUTE_HEIGHT;
 
 export function CalendarView({
   durationSelected,
-  taskType,
   onSlotSelected,
+  onBookSlot,
+  onRemoveSlot,
   externalSelectedSlots = [],
 }: CalendarViewProps) {
   const { data: user } = useCurrentUser();
@@ -58,7 +52,6 @@ export function CalendarView({
   const currentUser = user?.data?.user as
     | { displayName?: string; avatarUrl?: string | null }
     | undefined;
-  const createBooking = useCreateBooking();
 
   // Calendar State
   const [baseDate, setBaseDate] = useState(() => {
@@ -71,7 +64,7 @@ export function CalendarView({
   // Data Fetching
   const isoDateStr = baseDate.toISOString();
   const { data: availableData } = useAvailableBookings(isoDateStr, viewDays);
-  const availableBookings = availableData?.data?.bookings || [];
+  const availableBookings: AvailableBooking[] = availableData?.data?.bookings ?? [];
 
   const { data: myPendingData } = useUserBookings("PENDING");
   const myPendingBookings = myPendingData?.bookings || [];
@@ -90,10 +83,6 @@ export function CalendarView({
 
   // Hover & Selection State
   const [hoverSlot, setHoverSlot] = useState<{
-    dateIdx: number;
-    minuteOfDay: number;
-  } | null>(null);
-  const [selectedSlot, setSelectedSlot] = useState<{
     dateIdx: number;
     minuteOfDay: number;
   } | null>(null);
@@ -129,21 +118,18 @@ export function CalendarView({
     const d = new Date(baseDate);
     d.setDate(d.getDate() - viewDays);
     setBaseDate(d);
-    setSelectedSlot(null);
   };
 
   const goNext = () => {
     const d = new Date(baseDate);
     d.setDate(d.getDate() + viewDays);
     setBaseDate(d);
-    setSelectedSlot(null);
   };
 
   const goToday = () => {
     const d = new Date();
     d.setHours(0, 0, 0, 0);
     setBaseDate(d);
-    setSelectedSlot(null);
     if (scrollRef.current) {
       const currentMinute = now.getHours() * 60 + now.getMinutes();
       scrollRef.current.scrollTop = Math.max(
@@ -153,57 +139,11 @@ export function CalendarView({
     }
   };
 
-  // Convert slot hover to actual date string for booking
-  const handleBook = async () => {
-    if (!selectedSlot) return;
-    const targetDate = new Date(days[selectedSlot.dateIdx]);
-    targetDate.setHours(
-      Math.floor(selectedSlot.minuteOfDay / 60),
-      selectedSlot.minuteOfDay % 60,
-      0,
-      0,
-    );
-
-    // If a parent wants to collect slots (multi-booking flow), notify it
-    if (onSlotSelected) {
-      const hours = Math.floor(selectedSlot.minuteOfDay / 60);
-      const mins = selectedSlot.minuteOfDay % 60;
-      const endMins = selectedSlot.minuteOfDay + durationSelected;
-      const endHours = Math.floor(endMins / 60);
-      const endMinRem = endMins % 60;
-      const fmt = (h: number, m: number) => {
-        const ampm = h >= 12 ? "pm" : "am";
-        const h12 = h === 0 ? 12 : h > 12 ? h - 12 : h;
-        return `${h12}:${m.toString().padStart(2, "0")}${ampm}`;
-      };
-      const slotId = `${targetDate.toISOString()}-${durationSelected}`;
-
-      onSlotSelected({
-        id: slotId,
-        dateLabel: targetDate.toLocaleDateString("en-US", {
-          weekday: "long",
-          month: "long",
-          day: "numeric",
-        }),
-        timeRange: `${fmt(hours, mins)} - ${fmt(endHours, endMinRem)}`,
-        durationMin: durationSelected,
-        slotTime: targetDate.toISOString(),
-      });
-      setSelectedSlot(null);
-      return;
-    }
-
-    // Legacy: immediate single booking
-    try {
-      await createBooking.mutateAsync({
-        slotTime: targetDate.toISOString(),
-        durationMin: durationSelected,
-      });
-      setSelectedSlot(null);
-      toast.success("Session booked!");
-    } catch (e: unknown) {
-      toast.error(e instanceof Error ? e.message : "Failed to book");
-    }
+  // An empty slot was clicked: add it to the selection
+  const selectSlot = (dateIdx: number, minuteOfDay: number) => {
+    const start = new Date(days[dateIdx] as Date);
+    start.setHours(Math.floor(minuteOfDay / 60), minuteOfDay % 60, 0, 0);
+    onSlotSelected(buildSelectedSlot(start, durationSelected));
   };
 
   // Render Helpers
@@ -313,7 +253,7 @@ export function CalendarView({
 
       {/* Scrollable Time Grid */}
       <div
-        id="calendar-scroll-area"
+        data-calendar-scroll
         ref={scrollRef}
         className="flex-1 overflow-y-auto overflow-x-hidden relative custom-scrollbar bg-white"
         onMouseLeave={() => setHoverSlot(null)}
@@ -375,7 +315,7 @@ export function CalendarView({
               (b: any) => new Date(b.slotTime).toDateString() === dayStartStr,
             );
             const availableInColumn = availableBookings.filter(
-              (b: any) => new Date(b.slotTime).toDateString() === dayStartStr,
+              (b) => new Date(b.slotTime).toDateString() === dayStartStr,
             );
             const sessionsInColumn = mySessions.filter(
               (s: any) =>
@@ -429,13 +369,13 @@ export function CalendarView({
                         height: SLOT_HEIGHT,
                       }}
                       onMouseEnter={() => {
-                        if (!isPast && !selectedSlot) {
+                        if (!isPast) {
                           setHoverSlot({ dateIdx, minuteOfDay });
                         }
                       }}
                       onClick={() => {
                         if (!isPast) {
-                          setSelectedSlot({ dateIdx, minuteOfDay });
+                          selectSlot(dateIdx, minuteOfDay);
                           setHoverSlot(null);
                         }
                       }}
@@ -444,7 +384,7 @@ export function CalendarView({
                 })}
 
                 {/* HOVER PREVIEW - user avatar + duration */}
-                {hoverSlot?.dateIdx === dateIdx && !selectedSlot && (
+                {hoverSlot?.dateIdx === dateIdx && (
                   <div
                     className="absolute left-1 right-2 rounded-xl border-2 border-dashed border-[#0245A3]/50 pointer-events-none z-10 overflow-hidden"
                     style={{
@@ -472,139 +412,61 @@ export function CalendarView({
                   </div>
                 )}
 
-                {/* SELECTED SLOT - Book at top, Clear at bottom */}
-                {selectedSlot?.dateIdx === dateIdx && (
-                  <div
-                    className="absolute left-1 right-2 rounded-xl bg-white border-2 border-[#0245A3] shadow-xl z-20 overflow-hidden flex flex-col"
-                    style={{
-                      top: selectedSlot.minuteOfDay * MINUTE_HEIGHT,
-                      height: Math.max(durationSelected * MINUTE_HEIGHT, 100),
-                    }}
-                  >
-                    {/* Book button — top */}
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleBook();
-                      }}
-                      className="w-full py-2.5 bg-[#0245A3] text-white text-sm font-bold hover:brightness-110 transition-all shrink-0"
-                    >
-                      Book
-                    </button>
-
-                    {/* Content area */}
-                    <div className="flex-1 flex items-start gap-2 p-2">
-                      <Avatar className="w-7 h-7 rounded-lg shrink-0 border border-white/60">
-                        <AvatarImage
-                          src={currentUser?.avatarUrl ?? undefined}
-                          className="object-cover"
-                        />
-                        <AvatarFallback className="rounded-lg bg-[#0245A3]/15 text-[#0245A3] text-[10px] font-bold">
-                          {currentUser?.displayName?.charAt(0)?.toUpperCase() ??
-                            "U"}
-                        </AvatarFallback>
-                      </Avatar>
-                      <div>
-                        <div className="text-[11px] font-bold text-slate-700">
-                          {(() => {
-                            const h = Math.floor(selectedSlot.minuteOfDay / 60);
-                            const m = selectedSlot.minuteOfDay % 60;
-                            const ap = h >= 12 ? "pm" : "am";
-                            const h12 = h === 0 ? 12 : h > 12 ? h - 12 : h;
-                            return `${h12}:${m.toString().padStart(2, "0")}${ap}`;
-                          })()}
-                        </div>
-                        <div className="text-[10px] text-slate-400">
-                          Matching...
-                        </div>
-                      </div>
-                      <Shuffle className="w-3 h-3 text-slate-400 ml-auto mt-0.5 shrink-0" />
-                    </div>
-
-                    {/* Clear button — bottom */}
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setSelectedSlot(null);
-                      }}
-                      className="w-full py-2 text-[#0245A3] text-sm font-semibold hover:bg-slate-50 transition-colors border-t border-slate-100 shrink-0"
-                    >
-                      Clear
-                    </button>
-                  </div>
-                )}
-
-                {/* QUEUED SLOTS (externally selected, awaiting batch booking) */}
+                {/* SELECTED SLOTS: a card with Book (this slot only) and Clear */}
                 {externalSelectedSlots
-                  .filter(
-                    (s) => new Date(s.slotTime).toDateString() === dayStartStr,
-                  )
+                  .filter((s) => new Date(s.slotTime).toDateString() === dayStartStr)
                   .map((s) => {
                     const slotDate = new Date(s.slotTime);
-                    const slotMin =
-                      slotDate.getHours() * 60 + slotDate.getMinutes();
-                    const slotPxH = Math.max(s.durationMin * MINUTE_HEIGHT, 60);
+                    const slotMin = slotDate.getHours() * 60 + slotDate.getMinutes();
                     return (
                       <div
                         key={s.id}
-                        className="absolute left-1 right-2 rounded-xl border border-dashed border-[#0245A3]/40 overflow-hidden pointer-events-none"
+                        className="absolute left-1 right-2 rounded-xl bg-white border-2 border-[#0245A3] shadow-xl z-20 overflow-hidden flex flex-col"
                         style={{
                           top: slotMin * MINUTE_HEIGHT,
-                          height: slotPxH,
-                          zIndex: 15,
-                          backgroundColor: "rgba(2,69,163,0.06)",
+                          height: Math.max(s.durationMin * MINUTE_HEIGHT, 100),
                         }}
                       >
-                        <div className="p-1.5 flex items-center gap-1.5">
-                          <Avatar className="w-7 h-7 rounded-lg shrink-0">
-                            <AvatarImage
-                              src={currentUser?.avatarUrl ?? undefined}
-                              className="object-cover"
-                            />
-                            <AvatarFallback className="rounded-lg bg-[#0245A3]/15 text-[#0245A3] text-[9px] font-bold">
-                              {currentUser?.displayName
-                                ?.charAt(0)
-                                ?.toUpperCase() ?? "U"}
+                        <button
+                          type="button"
+                          onClick={() => onBookSlot(s)}
+                          className="w-full py-2.5 bg-[#0245A3] text-white text-sm font-bold hover:brightness-110 transition-all shrink-0"
+                        >
+                          Book
+                        </button>
+                        <div className="flex-1 flex items-start gap-2 p-2">
+                          <Avatar className="w-7 h-7 rounded-lg shrink-0 border border-white/60">
+                            <AvatarImage src={currentUser?.avatarUrl ?? undefined} className="object-cover" />
+                            <AvatarFallback className="rounded-lg bg-[#0245A3]/15 text-[#0245A3] text-[10px] font-bold">
+                              {currentUser?.displayName?.charAt(0)?.toUpperCase() ?? "U"}
                             </AvatarFallback>
                           </Avatar>
-                          <span className="text-[10px] font-bold text-[#0245A3]">
-                            {s.durationMin}m
-                          </span>
-                          <Shuffle className="w-3 h-3 text-[#0245A3]/50" />
+                          <div className="min-w-0">
+                            <div className="text-[11px] font-bold text-slate-700">{s.timeRange}</div>
+                            <div className="text-[10px] text-slate-400">{s.durationMin} min</div>
+                          </div>
                         </div>
+                        <button
+                          type="button"
+                          onClick={() => onRemoveSlot(s.id)}
+                          className="w-full py-2 text-[#0245A3] text-sm font-semibold hover:bg-slate-50 transition-colors border-t border-slate-100 shrink-0"
+                        >
+                          Clear
+                        </button>
                       </div>
                     );
                   })}
 
-                {/* AVAILABLE BOOKINGS - rounded square avatars */}
-                {availableInColumn.map((b: any) => {
+                {/* PEOPLE WAITING FOR A PARTNER */}
+                {availableInColumn.map((b) => {
                   const d = new Date(b.slotTime);
-                  const min = d.getHours() * 60 + d.getMinutes();
                   return (
-                    <div
+                    <WaitingPerson
                       key={b.id}
-                      className="absolute z-30 cursor-pointer"
-                      style={{ top: min * MINUTE_HEIGHT - 16, right: "6px" }}
-                      title={`${b.user.displayName} · ${b.durationMin}min`}
-                      onClick={() => {
-                        createBooking.mutate({
-                          slotTime: b.slotTime,
-                          durationMin: b.durationMin,
-                        });
-                      }}
-                    >
-                      <div className="w-9 h-9 rounded-xl overflow-hidden border-2 border-white shadow-md hover:scale-110 transform transition-all">
-                        <Avatar className="w-full h-full rounded-xl">
-                          <AvatarImage
-                            src={b.user.avatarUrl}
-                            className="object-cover"
-                          />
-                          <AvatarFallback className="rounded-xl bg-[#8FBAF3]/40 text-[#0245A3] text-xs font-bold">
-                            {b.user.displayName.charAt(0)}
-                          </AvatarFallback>
-                        </Avatar>
-                      </div>
-                    </div>
+                      booking={b}
+                      top={(d.getHours() * 60 + d.getMinutes()) * MINUTE_HEIGHT}
+                      onSelect={(booking) => onSlotSelected(buildSelectedSlot(new Date(booking.slotTime), booking.durationMin))}
+                    />
                   );
                 })}
 

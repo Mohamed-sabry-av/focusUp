@@ -38,19 +38,20 @@ import {
 import { useCreateBooking } from "@/hooks/useBookings";
 import { toast } from "sonner";
 import { CalendarView } from "@/components/dashboard/CalendarView";
+import { BookingSidebar } from "@/components/dashboard/BookingSidebar";
+import { BookingOptions } from "@/components/dashboard/BookingOptions";
+import { FavoritesPanel } from "@/components/dashboard/FavoritesPanel";
+import { PrivacySettings } from "@/components/dashboard/PrivacySettings";
+import { StrikeIndicator } from "@/components/dashboard/StrikeIndicator";
+import { quotaLabel } from "@/lib/quota-text";
+import { activeSuspensionEnd, bookingErrorMessage, formatDateTime } from "@/lib/booking-errors";
+import { DEFAULT_BOOKING_OPTIONS, type BookingOptions as BookingOptionsValue } from "@/lib/booking-options";
+import { summarizeOutcomes, type SelectedSlot, type SlotOutcome } from "@/lib/selected-slot";
 import { SignOutButton } from "@/components/dashboard/SignOutButton";
 
 // ── Types ──────────────────────────────────────────────────────
 
 type TabId = "calendar" | "people" | "rewards" | "settings" | "help";
-
-interface SelectedSlot {
-  id: string;
-  dateLabel: string;
-  timeRange: string;
-  durationMin: number;
-  slotTime: string;
-}
 
 // ── Nav items ─────────────────────────────────────────────────
 
@@ -60,7 +61,7 @@ const NAV_ITEMS: Array<{
   label: string;
 }> = [
   { id: "calendar", icon: Home, label: "Home" },
-  { id: "people", icon: Users, label: "People" },
+  { id: "people", icon: Users, label: "Favorites" },
   { id: "rewards", icon: Gift, label: "Rewards" },
   { id: "settings", icon: Settings, label: "Settings" },
   { id: "help", icon: HelpCircle, label: "Help" },
@@ -123,137 +124,6 @@ function LeftNav({
   );
 }
 
-// ── Left Booking Panel ────────────────────────────────────────
-
-function BookingPanel({
-  duration,
-  setDuration,
-  selectedSlots,
-  onRemoveSlot,
-  onClearAll,
-  onBookAll,
-  isBooking,
-  isOpen,
-  onToggle,
-}: {
-  duration: number;
-  setDuration: (d: number) => void;
-  selectedSlots: SelectedSlot[];
-  onRemoveSlot: (id: string) => void;
-  onClearAll: () => void;
-  onBookAll: () => void;
-  isBooking: boolean;
-  isOpen: boolean;
-  onToggle: () => void;
-}) {
-  const DURATIONS = [25, 50, 75];
-
-  return (
-    <div className="w-[260px] bg-white flex flex-col shrink-0 h-full">
-      {/* Header with toggle */}
-      <div className="flex items-center justify-between px-4 pt-4 pb-0 shrink-0">
-        <span className="text-xs font-bold text-slate-400 uppercase tracking-widest">
-          Session
-        </span>
-        <button
-          onClick={onToggle}
-          title={isOpen ? "Collapse panel" : "Expand panel"}
-          className="text-slate-400 hover:text-slate-600 text-xs font-bold tracking-widest transition-colors"
-        >
-          {isOpen ? "«" : "»"}
-        </button>
-      </div>
-
-      <div className="p-4 space-y-4 flex-1 overflow-y-auto">
-        {/* Book session CTA */}
-        <button
-          onClick={onBookAll}
-          disabled={selectedSlots.length === 0 || isBooking}
-          className="w-full py-3 rounded-xl font-bold text-sm transition-all active:scale-[0.98] bg-[#0245A3] text-white shadow-md shadow-[#0245A3]/20 hover:brightness-110 disabled:opacity-60"
-        >
-          {isBooking ? "Booking..." : "Book session"}
-        </button>
-
-        {/* Duration + controls row */}
-        <div className="flex items-center gap-2">
-          <div className="flex items-center gap-1 bg-slate-100 rounded-lg p-1">
-            {DURATIONS.map((d) => (
-              <button
-                key={d}
-                onClick={() => setDuration(d)}
-                className={cn(
-                  "px-3 py-1.5 rounded-md text-xs font-bold transition-all",
-                  duration === d
-                    ? "bg-white shadow-sm text-slate-800"
-                    : "text-slate-400 hover:text-slate-600",
-                )}
-              >
-                {d}m
-              </button>
-            ))}
-          </div>
-          <button className="w-8 h-8 flex items-center justify-center rounded-lg bg-slate-100 text-slate-500 hover:bg-slate-200 transition-colors">
-            <Shuffle className="w-4 h-4" />
-          </button>
-          <button className="w-8 h-8 flex items-center justify-center rounded-lg bg-slate-100 text-slate-500 hover:bg-slate-200 transition-colors">
-            <ChevronDown className="w-4 h-4" />
-          </button>
-        </div>
-
-        {/* Selected sessions */}
-        {selectedSlots.length > 0 && (
-          <>
-            <div className="h-px bg-slate-100" />
-            <div className="flex items-center justify-between">
-              <div className="text-xs font-bold text-slate-500">
-                {selectedSlots.length} Session
-                {selectedSlots.length !== 1 ? "s" : ""} Selected
-              </div>
-              <button
-                onClick={onClearAll}
-                className="text-xs text-slate-400 hover:text-red-500 transition-colors"
-              >
-                Clear all
-              </button>
-            </div>
-
-            <div className="space-y-2">
-              {selectedSlots.map((slot) => (
-                <div
-                  key={slot.id}
-                  className="rounded-xl border border-[#0245A3]/30 bg-[#0245A3]/5 p-3"
-                >
-                  <div className="flex items-start justify-between">
-                    <div>
-                      <div className="text-xs font-bold text-slate-700">
-                        {slot.dateLabel}
-                      </div>
-                      <div className="text-xs text-slate-500 mt-0.5">
-                        {slot.timeRange}
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-1">
-                      <span className="text-[10px] font-bold text-[#0245A3]">
-                        {slot.durationMin}m
-                      </span>
-                      <button
-                        onClick={() => onRemoveSlot(slot.id)}
-                        className="ml-1 text-slate-400 hover:text-red-500 transition-colors"
-                      >
-                        <X className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </>
-        )}
-      </div>
-    </div>
-  );
-}
-
 // ── Right Profile Panel ───────────────────────────────────────
 
 function RightProfilePanel({ onCollapse }: { onCollapse: () => void }) {
@@ -300,9 +170,9 @@ function RightProfilePanel({ onCollapse }: { onCollapse: () => void }) {
               {firstName}!
             </div>
             <div className="text-xs text-slate-400 font-medium">
-              {isPro
-                ? "Pro Plan · Unlimited"
-                : "Free Plan · 3 sessions per week"}
+              {stats
+                ? quotaLabel(stats.planTier, { used: stats.sessionsUsedThisWeek ?? 0, limit: stats.sessionLimit ?? null })
+                : ""}
             </div>
 
             {!isPro && (
@@ -311,6 +181,8 @@ function RightProfilePanel({ onCollapse }: { onCollapse: () => void }) {
               </button>
             )}
           </div>
+
+          <StrikeIndicator />
 
           <div className="h-px bg-slate-100" />
 
@@ -353,40 +225,6 @@ function RightProfilePanel({ onCollapse }: { onCollapse: () => void }) {
           </button>
         ))}
         <SignOutButton />
-      </div>
-    </div>
-  );
-}
-
-// ── Center Panel: People ──────────────────────────────────────
-
-function PeoplePanel() {
-  return (
-    <div className="flex-1 bg-white flex flex-col overflow-hidden">
-      <div className="px-8 py-6 border-b border-slate-100">
-        <h1 className="text-2xl font-bold text-slate-900">People</h1>
-      </div>
-      <div className="px-8 py-4 flex items-center gap-3 border-b border-slate-100">
-        <select className="px-3 py-2 rounded-lg border border-slate-200 text-sm font-medium text-slate-700 bg-white appearance-none pr-8 outline-none">
-          <option>Favorites</option>
-          <option>All Partners</option>
-        </select>
-        <div className="flex-1" />
-        <select className="px-3 py-2 rounded-lg border border-slate-200 text-sm font-medium text-slate-700 bg-white appearance-none pr-8 outline-none">
-          <option>Recently met</option>
-          <option>Most sessions</option>
-        </select>
-      </div>
-      <div className="flex-1 flex items-center justify-center text-slate-400">
-        <div className="text-center">
-          <Users className="w-12 h-12 mx-auto mb-3 opacity-30" />
-          <p className="text-sm font-medium">
-            Complete sessions to see your partners here
-          </p>
-        </div>
-      </div>
-      <div className="px-8 py-4 border-t border-slate-100 text-center text-sm text-slate-400 font-medium">
-        1 of 1 &nbsp; «&#8249; ›»
       </div>
     </div>
   );
@@ -601,7 +439,9 @@ function SettingsPanel() {
 
         {/* ── Preferences tab ── */}
         {settingsTab === "preferences" && (
-          <div className="divide-y divide-slate-100">
+          <div>
+            <PrivacySettings />
+            <div className="divide-y divide-slate-100">
             {[
               {
                 title: "Focusmate Guides Preference",
@@ -617,11 +457,6 @@ function SettingsPanel() {
                 hasEdit: true,
               },
               { title: "Prefer Favorites", value: "Anyone", hasEdit: true },
-              {
-                title: "Gender Preference",
-                value: "Match me with everyone",
-                hasEdit: true,
-              },
               {
                 title: "Time Format",
                 value: "12-hour (AM/PM)",
@@ -674,6 +509,7 @@ function SettingsPanel() {
               </div>
               <Toggle value={false} onChange={() => {}} />
             </div>
+            </div>
           </div>
         )}
 
@@ -684,7 +520,6 @@ function SettingsPanel() {
             <div className="divide-y divide-slate-100">
               {[
                 { title: "Name", value: user?.displayName ?? "—" },
-                { title: "Gender", value: "Not set yet" },
                 { title: "Timezone", value: user?.timezone ?? "UTC" },
                 {
                   title: "Profile link",
@@ -810,16 +645,24 @@ export default function DashboardPage() {
   const [isRightPanelOpen, setIsRightPanelOpen] = useState(true);
   const [mobileBookingOpen, setMobileBookingOpen] = useState(false);
 
+  const [options, setOptionsState] = useState<BookingOptionsValue>(DEFAULT_BOOKING_OPTIONS);
+  const setOptions = useCallback(
+    (patch: Partial<BookingOptionsValue>) => setOptionsState((prev) => ({ ...prev, ...patch })),
+    [],
+  );
+  const [outcomes, setOutcomes] = useState<Record<string, SlotOutcome>>({});
+
+  const { data: userData } = useCurrentUser();
+  const currentUser = userData?.data?.user as { id: string; suspendedUntil?: string | null } | undefined;
+  const suspensionEnd = activeSuspensionEnd(currentUser?.suspendedUntil);
+  const blockedReason = suspensionEnd
+    ? `Your account is suspended until ${formatDateTime(suspensionEnd.toISOString())}. You cannot book until then.`
+    : null;
+
   const createBooking = useCreateBooking();
 
   const handleSlotSelected = useCallback(
-    (slot: {
-      id: string;
-      dateLabel: string;
-      timeRange: string;
-      durationMin: number;
-      slotTime: string;
-    }) => {
+    (slot: SelectedSlot) => {
       setSelectedSlots((prev) => {
         const exists = prev.find((s) => s.id === slot.id);
         if (exists) return prev.filter((s) => s.id !== slot.id);
@@ -829,32 +672,80 @@ export default function DashboardPage() {
     [],
   );
 
-  const handleRemoveSlot = useCallback((id: string) => {
-    setSelectedSlots((prev) => prev.filter((s) => s.id !== id));
+  const handleClearAll = useCallback(() => {
+    setSelectedSlots([]);
+    setOutcomes({});
   }, []);
 
-  const handleClearAll = useCallback(() => setSelectedSlots([]), []);
+  const handleRemoveSlotWithOutcome = useCallback((id: string) => {
+    setSelectedSlots((prev) => prev.filter((s) => s.id !== id));
+    setOutcomes((prev) => {
+      const { [id]: _removed, ...rest } = prev;
+      return rest;
+    });
+  }, []);
 
-  const handleBookAll = useCallback(async () => {
-    if (selectedSlots.length === 0 || isBooking) return;
-    setIsBooking(true);
-    try {
-      for (const slot of selectedSlots) {
-        await createBooking.mutateAsync({
-          slotTime: slot.slotTime,
-          durationMin: slot.durationMin,
-        });
+  /** Books the given slots one by one and records what happened to each. */
+  const bookSlots = useCallback(
+    async (slots: SelectedSlot[]) => {
+      if (slots.length === 0 || isBooking || blockedReason) return;
+      setIsBooking(true);
+      const results: SlotOutcome[] = [];
+      const nextOutcomes: Record<string, SlotOutcome> = {};
+      try {
+        for (const slot of slots) {
+          try {
+            const result = await createBooking.mutateAsync({
+              slotTime: slot.slotTime,
+              durationMin: slot.durationMin,
+              ...options,
+            });
+            const session = result.data.session;
+            const partner = session
+              ? session.user1Id === currentUser?.id
+                ? session.user2
+                : session.user1
+              : null;
+            const outcome: SlotOutcome = partner
+              ? { kind: "matched", message: `Matched with ${partner.displayName}` }
+              : { kind: "waiting", message: "Booked. Waiting for a partner." };
+            results.push(outcome);
+            // Booked slots leave the selection; failed ones stay with their reason.
+            setSelectedSlots((prev) => prev.filter((s) => s.id !== slot.id));
+          } catch (error) {
+            const outcome: SlotOutcome = { kind: "failed", message: bookingErrorMessage(error) };
+            results.push(outcome);
+            nextOutcomes[slot.id] = outcome;
+          }
+        }
+        setOutcomes((prev) => ({ ...prev, ...nextOutcomes }));
+        const failed = results.some((r) => r.kind === "failed");
+        (failed ? toast.error : toast.success)(summarizeOutcomes(results));
+        const matched = results.find((r) => r.kind === "matched");
+        if (matched) toast.success(matched.message);
+      } finally {
+        setIsBooking(false);
       }
-      setSelectedSlots([]);
-      toast.success(
-        `${selectedSlots.length} session${selectedSlots.length !== 1 ? "s" : ""} booked!`,
-      );
-    } catch (e: unknown) {
-      toast.error(e instanceof Error ? e.message : "Failed to book sessions");
-    } finally {
-      setIsBooking(false);
-    }
-  }, [selectedSlots, isBooking, createBooking]);
+    },
+    [isBooking, blockedReason, createBooking, options, currentUser?.id],
+  );
+
+  const handleBookAll = useCallback(() => bookSlots(selectedSlots), [bookSlots, selectedSlots]);
+
+  /** The Book button on a slot card: books that one slot, and keeps it listed with the reason if it fails. */
+  const handleBookSlot = useCallback(
+    (slot: SelectedSlot) => bookSlots([slot]),
+    [bookSlots],
+  );
+
+  const handleBookWithoutSelection = useCallback(() => {
+    // The page renders a mobile and a desktop calendar; scroll the one that is on screen.
+    const visible = Array.from(document.querySelectorAll<HTMLElement>("[data-calendar-scroll]")).find(
+      (el) => el.offsetParent !== null,
+    );
+    visible?.scrollTo({ top: 0, behavior: "smooth" });
+    toast.info("Pick a time on the calendar, then press Book.");
+  }, []);
 
   return (
     <>
@@ -882,11 +773,13 @@ export default function DashboardPage() {
             {activeTab === "calendar" && (
               <CalendarView
                 durationSelected={duration}
-                taskType="desk"
                 onSlotSelected={handleSlotSelected}
+                onBookSlot={handleBookSlot}
+                onRemoveSlot={handleRemoveSlotWithOutcome}
+                externalSelectedSlots={selectedSlots}
               />
             )}
-            {activeTab === "people" && <PeoplePanel />}
+            {activeTab === "people" && <FavoritesPanel />}
             {activeTab === "rewards" && <RewardsPanel />}
             {activeTab === "settings" && <SettingsPanel />}
             {activeTab === "help" && <HelpPanel />}
@@ -946,8 +839,8 @@ export default function DashboardPage() {
           <nav className="shrink-0 bg-white border-t border-slate-200 flex items-center justify-around px-2 py-2">
             {[
               { id: "calendar" as TabId, icon: Home, label: "Home" },
-              { id: "people" as TabId, icon: Calendar, label: "Schedule" },
-              { id: "rewards" as TabId, icon: Star, label: "Favorites" },
+              { id: "people" as TabId, icon: Star, label: "Favorites" },
+              { id: "rewards" as TabId, icon: Gift, label: "Rewards" },
               { id: "settings" as TabId, icon: Menu, label: "Menu" },
             ].map(({ id, icon: Icon, label }) => (
               <button
@@ -985,16 +878,20 @@ export default function DashboardPage() {
           {/* Booking panel card */}
           {isLeftPanelOpen && (
             <div className="rounded-2xl overflow-hidden shadow-sm border border-slate-200/60 shrink-0 bg-white">
-              <BookingPanel
+              <BookingSidebar
                 duration={duration}
                 setDuration={setDuration}
+                options={options}
+                setOptions={setOptions}
                 selectedSlots={selectedSlots}
-                onRemoveSlot={handleRemoveSlot}
+                outcomes={outcomes}
+                onRemoveSlot={handleRemoveSlotWithOutcome}
                 onClearAll={handleClearAll}
-                onBookAll={handleBookAll}
+                onBook={handleBookAll}
+                onBookWithoutSelection={handleBookWithoutSelection}
                 isBooking={isBooking}
-                isOpen={isLeftPanelOpen}
-                onToggle={() => setIsLeftPanelOpen(false)}
+                blockedReason={blockedReason}
+                onCollapse={() => setIsLeftPanelOpen(false)}
               />
             </div>
           )}
@@ -1015,11 +912,13 @@ export default function DashboardPage() {
             {activeTab === "calendar" && (
               <CalendarView
                 durationSelected={duration}
-                taskType="desk"
                 onSlotSelected={handleSlotSelected}
+                onBookSlot={handleBookSlot}
+                onRemoveSlot={handleRemoveSlotWithOutcome}
+                externalSelectedSlots={selectedSlots}
               />
             )}
-            {activeTab === "people" && <PeoplePanel />}
+            {activeTab === "people" && <FavoritesPanel />}
             {activeTab === "rewards" && <RewardsPanel />}
             {activeTab === "settings" && <SettingsPanel />}
             {activeTab === "help" && <HelpPanel />}
@@ -1071,7 +970,7 @@ export default function DashboardPage() {
             MOBILE BOOKING SETTINGS SHEET
         ════════════════════════════════════════════ */}
         <Sheet open={mobileBookingOpen} onOpenChange={setMobileBookingOpen}>
-          <SheetContent side="bottom" className="rounded-t-2xl bg-white p-6">
+          <SheetContent side="bottom" className="rounded-t-2xl bg-white p-6 max-h-[90vh] overflow-y-auto">
             <div className="space-y-5">
               <div className="flex items-center justify-between">
                 <h3 className="text-base font-bold text-slate-800">
@@ -1085,28 +984,18 @@ export default function DashboardPage() {
                 </button>
               </div>
 
-              <div className="space-y-2">
-                <div className="text-xs font-bold text-slate-400 uppercase tracking-widest">
-                  Duration
-                </div>
-                <div className="grid grid-cols-3 gap-2">
-                  {[25, 50, 75].map((d) => (
-                    <button
-                      key={d}
-                      onClick={() => setDuration(d)}
-                      className={cn(
-                        "py-3 rounded-xl text-sm font-bold flex flex-col items-center gap-0.5 transition-all",
-                        duration === d
-                          ? "bg-[#0245A3] text-white"
-                          : "bg-slate-100 text-slate-500",
-                      )}
-                    >
-                      <span>{d}</span>
-                      <span className="text-[9px] opacity-80">min</span>
-                    </button>
-                  ))}
-                </div>
-              </div>
+              <BookingOptions
+                duration={duration}
+                onDurationChange={setDuration}
+                options={options}
+                onOptionsChange={setOptions}
+              />
+
+              {blockedReason && (
+                <p role="alert" className="text-xs font-semibold text-red-600 leading-snug">
+                  {blockedReason}
+                </p>
+              )}
 
               <div className="h-px bg-slate-100" />
 
@@ -1115,7 +1004,7 @@ export default function DashboardPage() {
                   handleBookAll();
                   setMobileBookingOpen(false);
                 }}
-                disabled={selectedSlots.length === 0 || isBooking}
+                disabled={selectedSlots.length === 0 || isBooking || blockedReason !== null}
                 className="w-full py-4 bg-[#0245A3] text-white rounded-2xl text-sm font-bold hover:brightness-110 transition-all disabled:opacity-60"
               >
                 {isBooking

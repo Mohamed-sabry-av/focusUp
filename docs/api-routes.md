@@ -76,8 +76,8 @@ A banned or deactivated user gets `403` on every `/api/v1` route straight away, 
 
 - **Auth**: Required
 - **Body**: None
-- **Response**: `200 { data: { sessionsThisWeek, focusHoursThisWeek, currentStreak, sessionsUsedThisWeek, sessionLimit, planTier }, statusCode: 200 }`
-- **Notes**: `sessionLimit` is `3` for `FREE` tier, `null` for `PRO`/`TEAM`.
+- **Response**: `200 { data: { sessionsThisWeek, focusHoursThisWeek, currentStreak, sessionsUsedThisWeek, sessionLimit, planTier, strikesInLast30Days }, statusCode: 200 }`
+- **Notes**: `sessionsUsedThisWeek` counts Monday to Sunday in the user's timezone. `sessionLimit` is `6` for the `FREE` tier only when `QUOTA_ENFORCED` is on (it is off during the beta), otherwise `null`. `strikesInLast30Days` is the number of strikes that still count (5 suspend the account for 3 days).
 - **Errors**: `401` not authenticated, `404` user not found
 
 ---
@@ -98,6 +98,16 @@ A banned or deactivated user gets `403` on every `/api/v1` route straight away, 
 - **Response**: `200 { data: { partners: [{ id, displayName, username, avatarUrl, lastSessionDate, totalSessionsTogether }] }, total, page, totalPages }`
 - **Notes**: Returns unique partners from `COMPLETED` sessions only. Blocked users are excluded. Ordered by most recent session descending.
 - **Errors**: `401` not authenticated
+
+---
+
+### PATCH /api/v1/users/me
+
+- **Auth**: Required
+- **Body** (every field optional): `{ displayName, username, timezone, hidePhoto: boolean, dataSaver: boolean }`
+- **Notes**: `hidePhoto` shows your initials instead of your photo to other people on the calendar. `dataSaver` caps your video at 360p (applied by the session room).
+- **Response**: `200 { data: { user } }`
+- **Errors**: `400` validation failure, `401` not authenticated, `409` username taken
 
 ---
 
@@ -197,9 +207,9 @@ A banned or deactivated user gets `403` on every `/api/v1` route straight away, 
 ### POST /api/v1/bookings
 
 - **Auth**: Required, verified email
-- **Body**: `{ slotTime: ISO 8601 datetime, durationMin: 25 | 50 | 75, cameraOn?: boolean (default true), quiet?: boolean (default false), taskType?: "DESK" | "WALK" (default "DESK"), flexible?: boolean (default true) }`
+- **Body**: `{ slotTime: ISO 8601 datetime, durationMin: 25 | 50 | 75, quiet?: boolean (default false), taskType?: "DESK" | "WALK" | "ANY" (default "ANY"; the app calls them Desk, Moving, Anything), preferFavorites?: boolean (default true), cameraOn?: boolean (default true; the web app does not send it, the camera is chosen when joining), flexible?: boolean (default true) }`
 - **Response**: `201 { data: { bookingRequest, session }, statusCode: 201 }`. `session` is `null` when nobody compatible is waiting yet; the booking is then `PENDING`.
-- **Matching**: tried at once, and the match is final. Two bookings are compatible when they have the same start time and duration, are different people, have not blocked each other, and the other person is active, not banned and not suspended. **Camera, Quiet and Desk/Walk never block a match**: they only decide who is picked first among compatible people (favorites, then same camera, same Quiet, same Desk/Walk, then whoever waited longest).
+- **Matching**: tried at once, and the match is final. Two bookings are compatible when they have the same start time and duration, are different people, have not blocked each other, and the other person is active, not banned and not suspended. **Camera, Quiet and the task never block a match**: they only decide who is picked first among compatible people: favorites (only when the person who is booking has `preferFavorites` on), then the same camera, the same Quiet choice, the same task (`ANY` fits everybody), then whoever waited longest. Only the person who books second is the "requester", so only their `preferFavorites` counts.
 - **Rules**: starts at least 5 minutes ahead, on a quarter hour, at most 14 days ahead; at most 3 upcoming bookings; no overlap with your own other bookings; not suspended; the weekly free limit (6 sessions, Monday to Sunday in your timezone) applies only when `QUOTA_ENFORCED` is on, which it is not during the beta.
 - **Errors**: `400` invalid input, past or too-close time, not a quarter hour, more than 14 days ahead; `401` not authenticated; `403` email not verified, account suspended (`"… suspended until <date> …"`), or free limit reached; `409` a booking already at that time or overlapping, 3 upcoming bookings already, or too many people booking at once (try again)
 

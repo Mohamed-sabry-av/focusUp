@@ -107,7 +107,7 @@ Legend used in this doc:
 | Sign-up/login: email + password (with email verification), Google | Yes | Yes |
 | Onboarding: display name + photo; timezone auto-detected from the browser | Yes | Yes |
 | Booking calendar: 14 days, 15-minute start slots, 25/50/75 min, booked people shown | Yes | Yes |
-| Booking options: camera on/off, Quiet, Desk/Walk ("flexible" is stored for later) | Yes | Yes |
+| Booking options in the sidebar: duration, My Task (Desk / Moving / Anything), Quiet Mode, Prefer Favorites. The camera is chosen when joining the session, not when booking ("flexible" is stored for later) | Yes | Yes |
 | Matching engine (§5): favorites first, blocks respected, locks at booking | Yes | Yes |
 | Session room on LiveKit: video, audio, timer, goal, task list, text chat, opt-in screen share, report & block | Yes | Yes |
 | No-show handling: rematch at T+1, solo fallback at T+3 (§5.4) | Yes | Yes |
@@ -191,10 +191,10 @@ Two bookings are compatible when all hard filters match:
 | Both active, not suspended/banned | Hard |
 | **[v1.1]** Camera on/off | Soft: prefer the same choice; a cross-match shows the "Camera off" badge |
 | **[v1.1]** Quiet | Soft: prefer Quiet with Quiet; a cross-match shows the "Quiet mode" badge |
-| Desk/Walk | Soft (prefer same) [A] |
+| Desk / Moving / Anything | Soft (prefer same; **Anything fits everybody**) |
 | Favorite | Priority (match favorites first) |
 
-**[v1.1]** Order among compatible waiting bookings [A]: favorites → same camera choice → same Quiet choice → same Desk/Walk → oldest booking.
+**[v1.1]** Order among compatible waiting bookings [A]: favorites (only if the person booking has **Prefer Favorites** on, which is the default) → same camera choice → same Quiet choice → same task → oldest booking.
 
 **[v1.1]** Same-gender matching is deferred until after the beta: no gender field is stored and no hard filter exists yet. When it returns, gender is asked only the first time someone turns it on.
 
@@ -366,7 +366,8 @@ model Booking {             // one row per user per requested slot
   durationMin   Int           // 25 / 50 / 75
   cameraOn      Boolean       // [v1.1] soft preference
   quiet         Boolean       // [v1.1] soft preference
-  taskType      TaskType      // DESK / WALK
+  taskType      TaskType      // DESK / WALK ("Moving") / ANY ("Anything", the default)
+  preferFavorites Boolean     @default(true)
   sameGender    Boolean       @default(false)
   flexible      Boolean       @default(true)
   status        BookingStatus // PENDING / MATCHED / CANCELLED / LATE_CANCELLED / NO_SHOW / SOLO / COMPLETED

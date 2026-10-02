@@ -126,6 +126,8 @@ export function useUpdateProfile() {
       displayName?: string;
       username?: string;
       timezone?: string;
+      hidePhoto?: boolean;
+      dataSaver?: boolean;
     }) => {
       const res = await fetch(`${env.NEXT_PUBLIC_SERVER_URL}/api/v1/users/me`, {
         method: "PATCH",

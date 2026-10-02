@@ -1,6 +1,7 @@
 "use client";
 import { useMatchNotifications } from "@/hooks/useNotifications";
 import { VerifyEmailBanner } from "@/components/dashboard/VerifyEmailBanner";
+import { SuspensionBanner } from "@/components/dashboard/SuspensionBanner";
 
 export default function DashboardLayout({
   children,
@@ -11,6 +12,7 @@ export default function DashboardLayout({
   return (
     <div className="h-screen flex flex-col overflow-hidden bg-[#f4f4f6] text-[#1a1a2e] font-sans">
       <VerifyEmailBanner />
+      <SuspensionBanner />
       <div className="flex-1 min-h-0">{children}</div>
     </div>
   );
