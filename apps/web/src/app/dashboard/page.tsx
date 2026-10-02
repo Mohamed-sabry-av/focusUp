@@ -720,7 +720,10 @@ export default function DashboardPage() {
         }
         setOutcomes((prev) => ({ ...prev, ...nextOutcomes }));
         const failed = results.some((r) => r.kind === "failed");
-        (failed ? toast.error : toast.success)(summarizeOutcomes(results));
+        // One slot that failed: say why right in the toast, not only next to the slot.
+        const [only] = results;
+        const failureReason = results.length === 1 && only?.kind === "failed" ? only.message : null;
+        (failed ? toast.error : toast.success)(failureReason ?? summarizeOutcomes(results));
         const matched = results.find((r) => r.kind === "matched");
         if (matched) toast.success(matched.message);
       } finally {
