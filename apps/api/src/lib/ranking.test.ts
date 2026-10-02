@@ -15,7 +15,7 @@ function booking(over: Partial<RankableBooking> & { userId: string }): RankableB
   };
 }
 
-const me = { cameraOn: true, quiet: false, taskType: 'DESK' as const };
+const me = { cameraOn: true, quiet: false, taskType: 'DESK' as const, preferFavorites: true };
 const ids = (list: RankableBooking[]) => list.map((c) => c.userId);
 
 describe('rankCandidates', () => {
@@ -59,6 +59,24 @@ describe('rankCandidates', () => {
   it('still returns people who differ on every preference (nothing is filtered out)', () => {
     const opposite = booking({ userId: 'opposite', cameraOn: false, quiet: true, taskType: 'WALK' });
     expect(ids(rankCandidates(me, [opposite], new Set()))).toEqual(['opposite']);
+  });
+
+  it('treats "Anything" as the same task as everybody', async () => {
+    const walk = booking({ userId: 'walk', taskType: 'WALK' });
+    const anything = booking({ userId: 'anything', taskType: 'ANY' });
+    // Walk booked first, but Anything fits a Desk person just as well, so the older booking wins the tie
+    expect(ids(rankCandidates(me, [walk, anything], new Set()))).toEqual(['anything', 'walk']);
+    // A requester who picked Anything fits both equally
+    expect(ids(rankCandidates({ ...me, taskType: 'ANY' }, [walk, anything], new Set()))).toEqual(['walk', 'anything']);
+  });
+
+  it('ignores favorites when the requester turned Prefer Favorites off', () => {
+    const stranger = booking({ userId: 'stranger' });
+    const favorite = booking({ userId: 'favorite' });
+    expect(ids(rankCandidates({ ...me, preferFavorites: false }, [stranger, favorite], new Set(['favorite'])))).toEqual([
+      'stranger',
+      'favorite',
+    ]);
   });
 
   it('does not change the input array', () => {

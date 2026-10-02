@@ -104,7 +104,9 @@ export const CreateBookingInput = z.object({
   durationMin: z.union([z.literal(25), z.literal(50), z.literal(75)]),
   cameraOn: z.boolean().default(true),
   quiet: z.boolean().default(false),
-  taskType: z.enum(["DESK", "WALK"]).default("DESK"),
+  // DESK, WALK ("Moving" in the app) or ANY ("Anything": no preference)
+  taskType: z.enum(["DESK", "WALK", "ANY"]).default("ANY"),
+  preferFavorites: z.boolean().default(true),
   flexible: z.boolean().default(true),
 });
 export type CreateBookingInput = z.infer<typeof CreateBookingInput>;
@@ -128,6 +130,8 @@ export const UpdateProfileInput = z.object({
     .regex(/^[a-zA-Z0-9_-]+$/)
     .optional(),
   timezone: z.string().min(1).max(100).optional(),
+  hidePhoto: z.boolean().optional(),
+  dataSaver: z.boolean().optional(),
 });
 export type UpdateProfileInput = z.infer<typeof UpdateProfileInput>;
 

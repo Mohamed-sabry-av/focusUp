@@ -7,6 +7,7 @@ import type {
 import { AppError } from "../../../utils/errors";
 import { SessionStatus } from "@prisma/client";
 import { getQuotaStatus } from "../../../services/quota.service";
+import { countRecentStrikes } from "../../../services/strikes.service";
 
 export class UsersService {
   private static getStartOfWeek(date: Date) {
@@ -56,6 +57,8 @@ export class UsersService {
         ...(data.displayName && { displayName: data.displayName }),
         ...(data.username && { username: data.username }),
         ...(data.timezone && { timezone: data.timezone }),
+        ...(data.hidePhoto !== undefined && { hidePhoto: data.hidePhoto }),
+        ...(data.dataSaver !== undefined && { dataSaver: data.dataSaver }),
       },
     });
     return updated;
@@ -164,6 +167,7 @@ export class UsersService {
       currentStreak,
       sessionsUsedThisWeek: quota.used,
       sessionLimit: quota.limit,
+      strikesInLast30Days: await countRecentStrikes(userId, now),
       planTier: user.planTier,
     };
   }

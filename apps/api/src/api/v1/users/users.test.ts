@@ -17,6 +17,9 @@ vi.mock('../../../lib/prisma', () => ({
     bookingRequest: {
       count: vi.fn(),
     },
+    strike: {
+      count: vi.fn(),
+    },
   },
 }));
 
@@ -61,6 +64,39 @@ describe('Users Endpoints', () => {
     });
   });
 
+  describe('PATCH /api/v1/users/me (privacy settings)', () => {
+    it('saves hidePhoto and dataSaver', async () => {
+      const user = { id: 'user-1', isActive: true, isBanned: false, emailVerified: true };
+      (prisma.user.findUnique as any).mockResolvedValueOnce(user as any);
+      (prisma.user.update as any).mockResolvedValueOnce({ ...user, hidePhoto: true, dataSaver: true } as any);
+
+      const res = await request(app)
+        .patch('/api/v1/users/me')
+        .set('Cookie', [authCookie('user-1')])
+        .send({ hidePhoto: true, dataSaver: true });
+
+      expect(res.status).toBe(200);
+      expect(prisma.user.update).toHaveBeenCalledWith(
+        expect.objectContaining({ data: { hidePhoto: true, dataSaver: true } }),
+      );
+    });
+
+    it('can switch a setting off again (false is not ignored)', async () => {
+      const user = { id: 'user-1', isActive: true, isBanned: false, emailVerified: true };
+      (prisma.user.findUnique as any).mockResolvedValueOnce(user as any);
+      (prisma.user.update as any).mockResolvedValueOnce({ ...user, hidePhoto: false } as any);
+
+      await request(app)
+        .patch('/api/v1/users/me')
+        .set('Cookie', [authCookie('user-1')])
+        .send({ hidePhoto: false });
+
+      expect(prisma.user.update).toHaveBeenCalledWith(
+        expect.objectContaining({ data: { hidePhoto: false } }),
+      );
+    });
+  });
+
   describe('GET /api/v1/users/me/stats', () => {
     it('should return correct stats for FREE user', async () => {
       (prisma.user.findUnique as any).mockResolvedValue({
@@ -73,6 +109,7 @@ describe('Users Endpoints', () => {
 
       // sessions used this week (bookings that count toward the free allowance)
       (prisma.bookingRequest.count as any).mockResolvedValueOnce(4);
+      (prisma.strike.count as any).mockResolvedValueOnce(2);
 
       // sessionsThisWeek count
       (prisma.session.count as any).mockResolvedValueOnce(2);
@@ -95,6 +132,7 @@ describe('Users Endpoints', () => {
       // The free weekly limit is switched off during the beta, so there is no limit to show
       expect(res.body.data.sessionLimit).toBeNull();
       expect(res.body.data.sessionsUsedThisWeek).toBe(4);
+      expect(res.body.data.strikesInLast30Days).toBe(2);
       expect(res.body.data.planTier).toBe(PlanTier.FREE);
     });
 
@@ -110,6 +148,7 @@ describe('Users Endpoints', () => {
       (prisma.session.count as any).mockResolvedValue(0);
       (prisma.session.findMany as any).mockResolvedValue([]);
       (prisma.bookingRequest.count as any).mockResolvedValue(0);
+      (prisma.strike.count as any).mockResolvedValue(0);
 
       const res = await request(app)
         .get('/api/v1/users/me/stats')

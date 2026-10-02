@@ -61,6 +61,7 @@ enum BookingRequestStatus {
 enum TaskType {
   DESK
   WALK
+  ANY
 }
 
 enum StrikeReason {
@@ -263,11 +264,12 @@ model BookingRequest {
   sessionId   String?
 
   // Matching preferences (soft: they order candidates, they never block a match)
-  cameraOn      Boolean  @default(true)
-  quiet         Boolean  @default(false)
-  taskType      TaskType @default(DESK)
-  flexible      Boolean  @default(true)
-  countsToQuota Boolean  @default(true)
+  cameraOn        Boolean  @default(true)
+  quiet           Boolean  @default(false)
+  taskType        TaskType @default(DESK)
+  flexible        Boolean  @default(true)
+  preferFavorites Boolean  @default(true)
+  countsToQuota   Boolean  @default(true)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

@@ -4,9 +4,28 @@ import { AppError } from '../utils/errors';
 
 const MAX_ATTEMPTS = 3;
 
-/** Postgres aborts one of two conflicting serializable transactions: "write conflict or deadlock". */
-function isSerializationFailure(error: unknown): boolean {
-  return error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2034';
+interface DriverErrorLike {
+  name?: unknown;
+  cause?: { kind?: unknown; originalCode?: unknown } | null;
+}
+
+/**
+ * Postgres aborts one of two conflicting serializable transactions ("could not
+ * serialize access", code 40001). Prisma reports it in two shapes: P2034 from the
+ * query engine, and a DriverAdapterError (kind TransactionWriteConflict) from the
+ * pg driver adapter this project uses. Both mean "run it again".
+ */
+export function isSerializationFailure(error: unknown): boolean {
+  if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2034') {
+    return true;
+  }
+  if (typeof error === 'object' && error !== null) {
+    const e = error as DriverErrorLike;
+    if (e.name === 'DriverAdapterError') {
+      return e.cause?.kind === 'TransactionWriteConflict' || e.cause?.originalCode === '40001';
+    }
+  }
+  return false;
 }
 
 /**

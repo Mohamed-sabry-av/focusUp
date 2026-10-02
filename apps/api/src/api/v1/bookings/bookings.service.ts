@@ -132,6 +132,7 @@ export class BookingsService {
               cameraOn: params.cameraOn,
               quiet: params.quiet,
               taskType: params.taskType,
+              preferFavorites: params.preferFavorites,
               flexible: params.flexible,
             },
           });

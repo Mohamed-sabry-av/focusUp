@@ -2,7 +2,6 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import request from 'supertest';
 import app from '../../../app';
 import { prisma } from '../../../lib/prisma';
-import { MatchingService } from '../matching/matching.service';
 import {
   scheduleNoshowCheck,
   scheduleReminders,
@@ -120,19 +119,6 @@ const AUTH_USER_2 = {
 const FULL_USER = {
   ...AUTH_USER,
   displayName: 'User One',
-  avatarUrl: null,
-  timezone: 'UTC',
-  categories: [],
-  preferredLength: [25, 50],
-  stripeCustomerId: null,
-  isAdmin: false,
-  createdAt: new Date(),
-  updatedAt: new Date(),
-};
-
-const FULL_USER_2 = {
-  ...AUTH_USER_2,
-  displayName: 'User Two',
   avatarUrl: null,
   timezone: 'UTC',
   categories: [],

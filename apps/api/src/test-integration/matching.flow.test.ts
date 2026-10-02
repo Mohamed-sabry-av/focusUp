@@ -63,13 +63,20 @@ function lateSlot(k: number): Date {
   return new Date(Math.ceil(start / quarter) * quarter + k * quarter);
 }
 
-type Options = Partial<{ durationMin: number; cameraOn: boolean; quiet: boolean; taskType: 'DESK' | 'WALK' }>;
+type Options = Partial<{
+  durationMin: number;
+  cameraOn: boolean;
+  quiet: boolean;
+  taskType: 'DESK' | 'WALK' | 'ANY';
+  preferFavorites: boolean;
+}>;
 
 interface TestUser {
   id: string;
   email: string;
   post: (path: string, body?: object) => request.Test;
   get: (path: string) => request.Test;
+  patch: (path: string, body?: object) => request.Test;
   del: (path: string) => request.Test;
   book: (slot: Date, options?: Options) => Promise<request.Response>;
 }
@@ -97,6 +104,7 @@ async function createUser(tag: string, extra: { avatarUrl?: string; displayName?
     email,
     post: (path, body = {}) => withHeaders(agent.post(path)).send(body),
     get: (path) => withHeaders(agent.get(path)),
+    patch: (path, body = {}) => withHeaders(agent.patch(path)).send(body),
     del: (path) => withHeaders(agent.delete(path)),
     book: (slot, options = {}) =>
       withHeaders(agent.post('/api/v1/bookings')).send({ slotTime: slot.toISOString(), durationMin: 50, ...options }),
@@ -196,6 +204,38 @@ describe('matching', () => {
 
     const res = await me.book(slot, { cameraOn: true });
     expect(res.body.data.session.user1Id).toBe(favorite.id);
+  });
+
+  it('treats "Anything" as a perfect task match for everyone', async () => {
+    const slot = nextSlot();
+    const [walker, anything, me] = [
+      await createUser('t-walk'),
+      await createUser('t-any'),
+      await createUser('t-me'),
+    ];
+    await walker.post('/api/v1/blocks', { blockedId: anything.id }); // so both keep waiting
+    await walker.book(slot, { taskType: 'WALK' });
+    await anything.book(slot, { taskType: 'ANY' });
+
+    // I want a Desk session: the Moving person is a worse fit than someone with no task preference
+    const res = await me.book(slot, { taskType: 'DESK' });
+    expect(res.body.data.session.user1Id).toBe(anything.id);
+  });
+
+  it('ignores favorites when Prefer Favorites is off', async () => {
+    const slot = nextSlot();
+    const [stranger, favorite, me] = [
+      await createUser('pf-old'),
+      await createUser('pf-fav'),
+      await createUser('pf-me'),
+    ];
+    await me.post('/api/v1/favorites', { favoriteId: favorite.id });
+    await stranger.post('/api/v1/blocks', { blockedId: favorite.id });
+    await stranger.book(slot);
+    await favorite.book(slot);
+
+    const res = await me.book(slot, { preferFavorites: false });
+    expect(res.body.data.session.user1Id).toBe(stranger.id); // the older booking wins
   });
 
   it('never matches two people when either has blocked the other', async () => {
@@ -298,7 +338,7 @@ describe('booking rules', () => {
     expect((await user.book(slot)).status).toBe(201);
   });
 
-  it('stores the options and defaults to camera on, not Quiet, Desk', async () => {
+  it('stores the options and defaults to camera on, not Quiet, Anything, Prefer Favorites on', async () => {
     const user = await createUser('r-options');
     const withOptions = nextSlot();
     const defaults = nextSlot();
@@ -306,7 +346,13 @@ describe('booking rules', () => {
     await user.book(defaults);
 
     expect(await bookingOf(user.id, withOptions)).toMatchObject({ cameraOn: false, quiet: true, taskType: 'WALK' });
-    expect(await bookingOf(user.id, defaults)).toMatchObject({ cameraOn: true, quiet: false, taskType: 'DESK', flexible: true });
+    expect(await bookingOf(user.id, defaults)).toMatchObject({
+      cameraOn: true,
+      quiet: false,
+      taskType: 'ANY',
+      preferFavorites: true,
+      flexible: true,
+    });
   });
 
   it('does not enforce the weekly free limit while the quota is switched off', async () => {
@@ -450,6 +496,29 @@ describe('favorites', () => {
     expect(await prisma.favorite.count({ where: { OR: [{ userId: a.id }, { userId: b.id }] } })).toBe(0);
     expect((await a.post('/api/v1/favorites', { favoriteId: b.id })).status).toBe(409);
     expect((await b.post('/api/v1/favorites', { favoriteId: a.id })).status).toBe(409);
+  });
+});
+
+describe('privacy settings and strikes in the stats', () => {
+  it('saves Hide my photo and Data saver, and can switch them off again', async () => {
+    const user = await createUser('pr-a');
+    expect((await user.patch('/api/v1/users/me', { hidePhoto: true, dataSaver: true })).status).toBe(200);
+    expect(await prisma.user.findUniqueOrThrow({ where: { id: user.id } })).toMatchObject({ hidePhoto: true, dataSaver: true });
+
+    await user.patch('/api/v1/users/me', { hidePhoto: false });
+    expect(await prisma.user.findUniqueOrThrow({ where: { id: user.id } })).toMatchObject({ hidePhoto: false, dataSaver: true });
+  });
+
+  it('reports strikes from the last 30 days only', async () => {
+    const user = await createUser('pr-b');
+    await addStrike({ userId: user.id, reason: 'ADMIN', note: 'recent' });
+    await prisma.strike.create({
+      data: { userId: user.id, reason: 'ADMIN', createdAt: new Date(Date.now() - 40 * DAY) },
+    });
+
+    const stats = await user.get('/api/v1/users/me/stats');
+    expect(stats.status).toBe(200);
+    expect(stats.body.data.strikesInLast30Days).toBe(1);
   });
 });
 
