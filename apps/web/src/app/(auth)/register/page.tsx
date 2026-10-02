@@ -10,7 +10,7 @@ import { z } from "zod";
 import { Eye, EyeOff, Loader2 } from "lucide-react";
 import { cn } from "@focusUp/ui/lib/utils";
 import { toast } from "sonner";
-import { env } from "@focusUp/env/web";
+import { authClient, browserTimezone, webUrl } from "@/lib/auth-client";
 import { zodErrorToFieldErrors } from "@/lib/zod-field-errors";
 
 type RegisterFormValues = z.infer<typeof RegisterInput>;
@@ -51,29 +51,24 @@ export default function RegisterPage() {
 
   const mutation = useMutation({
     mutationFn: async (data: RegisterFormValues) => {
-      const res = await fetch(
-        `${env.NEXT_PUBLIC_SERVER_URL}/api/v1/auth/register`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(data),
-          credentials: "include",
-        },
-      );
-
-      if (!res.ok) {
-        const errorData = await res.json().catch(() => ({}));
-        throw new Error(errorData.error || "Failed to register");
+      const { error } = await authClient.signUp.email({
+        name: data.displayName,
+        email: data.email,
+        password: data.password,
+        timezone: browserTimezone(),
+        // Where the link in the verification email sends the user afterwards.
+        callbackURL: webUrl("/dashboard"),
+      });
+      if (error) {
+        throw new Error(error.message || "Failed to create your account");
       }
-      return res.json();
     },
     onSuccess: () => {
-      toast.success("Account created successfully!");
+      toast.success("Account created! Check your email to verify it.");
       router.push("/onboarding");
     },
     onError: (error) => {
       setServerError(error.message);
-      toast.error("Registration failed. Please check your details.");
     },
   });
 
@@ -82,8 +77,17 @@ export default function RegisterPage() {
     mutation.mutate(data);
   };
 
-  const handleGoogleLogin = () => {
-    window.location.href = `${env.NEXT_PUBLIC_SERVER_URL}/api/v1/auth/google`;
+  const handleGoogleLogin = async () => {
+    setServerError(null);
+    const { error } = await authClient.signIn.social({
+      provider: "google",
+      callbackURL: webUrl("/dashboard"),
+      newUserCallbackURL: webUrl("/onboarding"),
+      errorCallbackURL: webUrl("/register"),
+    });
+    if (error) {
+      setServerError(error.message || "Google sign-up is not available right now");
+    }
   };
 
   return (
@@ -141,7 +145,7 @@ export default function RegisterPage() {
               )}
 
               <form onSubmit={handleSubmit(onSubmit)} className="space-y-5">
-                <div className="grid grid-cols-2 gap-4">
+                <div>
                   <div className="space-y-1.5">
                     <label className="text-xs font-bold text-slate-500 px-1 uppercase tracking-wider block">
                       Display Name
@@ -159,27 +163,6 @@ export default function RegisterPage() {
                     {errors.displayName && (
                       <p className="text-xs text-red-500 font-medium ml-1 animate-in fade-in">
                         {errors.displayName.message}
-                      </p>
-                    )}
-                  </div>
-
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-bold text-slate-500 px-1 uppercase tracking-wider block">
-                      Username
-                    </label>
-                    <input
-                      {...register("username")}
-                      className={cn(
-                        "w-full px-4 py-3.5 rounded-xl border-2 transition-all duration-200 outline-none text-slate-800 font-medium placeholder:text-slate-400 placeholder:font-normal bg-slate-50",
-                        errors.username
-                          ? "border-red-300 focus:border-red-500 bg-white"
-                          : "border-transparent focus:border-[#003076] hover:border-slate-200 bg-slate-50 focus:bg-white",
-                      )}
-                      placeholder="janedoe"
-                    />
-                    {errors.username && (
-                      <p className="text-xs text-red-500 font-medium ml-1 animate-in fade-in">
-                        {errors.username.message}
                       </p>
                     )}
                   </div>

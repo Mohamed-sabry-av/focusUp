@@ -26,8 +26,10 @@ declare global {
 }
 
 /**
- * Reads the Better Auth session cookie, then loads the user from the database
- * so bans and deactivations apply immediately (not after the cookie cache expires).
+ * Reads the Better Auth session cookie, then loads the user from the database.
+ * The cookie cache is bypassed so that a revoked session (password reset, sign-out)
+ * and a ban or deactivation all apply at once, not after the cache expires. We
+ * already query the database on every request, so this costs one indexed lookup.
  */
 export const authMiddleware = async (
   req: Request,
@@ -37,6 +39,7 @@ export const authMiddleware = async (
   try {
     const session = await auth.api.getSession({
       headers: fromNodeHeaders(req.headers),
+      query: { disableCookieCache: true },
     });
     if (!session) {
       throw new AppError("Not authenticated", 401);

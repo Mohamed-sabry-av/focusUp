@@ -10,7 +10,7 @@ import { z } from "zod";
 import { Eye, EyeOff, Loader2 } from "lucide-react";
 import { cn } from "@focusUp/ui/lib/utils";
 import { toast } from "sonner";
-import { env } from "@focusUp/env/web";
+import { authClient, webUrl } from "@/lib/auth-client";
 import { zodErrorToFieldErrors } from "@/lib/zod-field-errors";
 
 type LoginFormValues = z.infer<typeof LoginInput>;
@@ -37,21 +37,13 @@ export default function LoginPage() {
 
   const mutation = useMutation({
     mutationFn: async (data: LoginFormValues) => {
-      const res = await fetch(
-        `${env.NEXT_PUBLIC_SERVER_URL}/api/v1/auth/login`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(data),
-          credentials: "include",
-        },
-      );
-
-      if (!res.ok) {
-        const errorData = await res.json().catch(() => ({}));
-        throw new Error(errorData.error || "Failed to login");
+      const { error } = await authClient.signIn.email({
+        email: data.email,
+        password: data.password,
+      });
+      if (error) {
+        throw new Error(error.message || "Failed to sign in");
       }
-      return res.json();
     },
     onSuccess: () => {
       toast.success("Welcome back!");
@@ -59,7 +51,6 @@ export default function LoginPage() {
     },
     onError: (error) => {
       setServerError(error.message);
-      toast.error("Login failed. Please check your credentials.");
     },
   });
 
@@ -68,8 +59,17 @@ export default function LoginPage() {
     mutation.mutate(data);
   };
 
-  const handleGoogleLogin = () => {
-    window.location.href = `${env.NEXT_PUBLIC_SERVER_URL}/api/v1/auth/google`;
+  const handleGoogleLogin = async () => {
+    setServerError(null);
+    const { error } = await authClient.signIn.social({
+      provider: "google",
+      callbackURL: webUrl("/dashboard"),
+      newUserCallbackURL: webUrl("/onboarding"),
+      errorCallbackURL: webUrl("/login"),
+    });
+    if (error) {
+      setServerError(error.message || "Google sign-in is not available right now");
+    }
   };
 
   return (

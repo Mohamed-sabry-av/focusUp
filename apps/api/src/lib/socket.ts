@@ -25,6 +25,7 @@ export function initializeSocket(httpServer: HttpServer) {
       // The browser sends the Better Auth session cookie with the handshake.
       const session = await auth.api.getSession({
         headers: fromNodeHeaders(socket.handshake.headers),
+        query: { disableCookieCache: true },
       });
 
       if (!session) {

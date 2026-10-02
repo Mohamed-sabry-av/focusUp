@@ -71,7 +71,8 @@ permanent. No throwaway code. No shortcuts that create tech debt.
 ## Workflow
 - `master` is always deployable
 - One short branch per change: `feat/…`, `fix/…`, `docs/…` — merged into `master` by PR
-- Pre-commit runs type checks and tests — never skip them
+- Pre-commit runs type checks and unit tests — never skip them
+- Run `bun run test:integration` (real Postgres) before changing auth, sessions or the database schema
 
 ## What You Must NEVER Change
 - Prisma schema enums (SessionStatus, PlanTier) without explicit instruction

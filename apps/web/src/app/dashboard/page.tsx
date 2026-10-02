@@ -38,6 +38,7 @@ import {
 import { useCreateBooking } from "@/hooks/useBookings";
 import { toast } from "sonner";
 import { CalendarView } from "@/components/dashboard/CalendarView";
+import { SignOutButton } from "@/components/dashboard/SignOutButton";
 
 // ── Types ──────────────────────────────────────────────────────
 
@@ -351,6 +352,7 @@ function RightProfilePanel({ onCollapse }: { onCollapse: () => void }) {
             <span className="text-xs font-medium text-slate-600">{label}</span>
           </button>
         ))}
+        <SignOutButton />
       </div>
     </div>
   );

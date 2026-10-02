@@ -36,6 +36,16 @@ bun run db:migrate
 bun run dev
 ```
 
+### Sign-in setup
+
+Login uses [Better Auth](https://www.better-auth.com) (email + password and Google).
+
+1. Put a random secret in `apps/api/.env`: `BETTER_AUTH_SECRET` (32+ characters; the server will not start without it). The `.env.example` file shows how to generate one.
+2. **Emails** (verification, password reset): with no `RESEND_API_KEY`, the API prints each email, including its link, in its log. Copy the link into the browser to continue the flow. Real sending needs a Resend account and a verified domain.
+3. **Google sign-in** (optional): create an OAuth client (type "Web application") in Google Cloud Console, add the redirect URI `http://localhost:3000/api/auth/callback/google`, and set `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET`. Without them the Google button reports that it is unavailable.
+
+Users must verify their email before they can book or join a session.
+
 | Service | URL |
 |---|---|
 | Web | http://localhost:3001 |
@@ -49,7 +59,8 @@ bun run dev
 |---|---|
 | `bun run dev` | Start api and web |
 | `bun run check-types` | Type-check every package |
-| `bun run test` | Run all tests |
+| `bun run test` | Run the unit tests (no database needed) |
+| `bun run test:integration` | Run the auth flows against a real Postgres (creates a `focusup_test` database; Docker Postgres must be running) |
 | `bun run db:migrate` | Create/apply a migration in development |
 | `bun run db:deploy` | Apply existing migrations (production) |
 | `bun run db:generate` | Regenerate the Prisma client |
