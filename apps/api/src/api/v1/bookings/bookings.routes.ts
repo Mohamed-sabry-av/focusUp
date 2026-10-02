@@ -1,12 +1,13 @@
 import express from 'express';
 import { BookingsController } from './bookings.controller';
 import { validate } from '../../../middleware/validate';
+import { requireVerified } from '../../../middleware/require-verified';
 import { CreateBookingInput } from './bookings.validation';
 
 const router = express.Router();
 
-// POST /api/v1/bookings — Create a booking request
-router.post('/', validate(CreateBookingInput), BookingsController.create);
+// POST /api/v1/bookings — Create a booking request (verified email required)
+router.post('/', requireVerified, validate(CreateBookingInput), BookingsController.create);
 
 // GET /api/v1/bookings — List user's booking requests
 router.get('/', BookingsController.list);

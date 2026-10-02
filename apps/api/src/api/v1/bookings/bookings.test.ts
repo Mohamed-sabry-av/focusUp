@@ -1,6 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import request from 'supertest';
-import jwt from 'jsonwebtoken';
 import app from '../../../app';
 import { prisma } from '../../../lib/prisma';
 import { MatchingService } from '../matching/matching.service';
@@ -86,12 +85,10 @@ vi.spyOn(console, 'warn').mockImplementation(() => {});
 
 // ── Helpers ────────────────────────────────────────────────────────
 
-const SECRET = process.env.JWT_SECRET || 'fallback_secret_do_not_use';
+import { authCookie } from '../../../test/auth-mock';
 
-function authCookie(userId: string): string {
-  const token = jwt.sign({ sub: userId }, SECRET);
-  return `access_token=${token}`;
-}
+// Stand-in for Better Auth's session lookup (see test/auth-mock.ts).
+vi.mock('../../../lib/auth', async () => (await import('../../../test/auth-mock')).authModuleMock);
 
 /** Returns a slot time 2 hours from now, on a 15-minute boundary */
 function futureSlot(): Date {
@@ -122,7 +119,6 @@ const AUTH_USER_2 = {
 
 const FULL_USER = {
   ...AUTH_USER,
-  passwordHash: null,
   displayName: 'User One',
   avatarUrl: null,
   timezone: 'UTC',
@@ -137,7 +133,6 @@ const FULL_USER = {
 
 const FULL_USER_2 = {
   ...AUTH_USER_2,
-  passwordHash: null,
   displayName: 'User Two',
   avatarUrl: null,
   timezone: 'UTC',
@@ -461,6 +456,22 @@ describe('Bookings & Matching', () => {
       expect(res.status).toBe(201);
       expect(res.body.data.bookingRequest.id).toBe('booking-new');
       expect(res.body.data.session).toBeNull();
+    });
+
+    it('should return 403 when the email is not verified', async () => {
+      (prisma.user.findUnique as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+        ...AUTH_USER,
+        emailVerified: false,
+      });
+
+      const res = await request(app)
+        .post('/api/v1/bookings')
+        .set('Cookie', [authCookie('user-1')])
+        .send({ slotTime: futureSlot().toISOString(), durationMin: 50 });
+
+      expect(res.status).toBe(403);
+      expect(res.body.error).toBe('Please verify your email first');
+      expect(prisma.bookingRequest.create).not.toHaveBeenCalled();
     });
 
     it('should return session when immediate match is found', async () => {

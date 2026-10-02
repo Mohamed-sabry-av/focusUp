@@ -1,11 +1,13 @@
+import { fromNodeHeaders } from "better-auth/node";
 import type { Request, Response, NextFunction } from "express";
-import { verifyAccessToken } from "../lib/jwt";
-import { AppError } from "../utils/errors";
+
+import { auth } from "../lib/auth";
 import { prisma } from "../lib/prisma";
+import { AppError } from "../utils/errors";
 
 declare global {
   namespace Express {
-    /** Populated by authMiddleware; aligns with Passport's req.user typing */
+    /** Populated by authMiddleware from the Better Auth session. */
     interface User {
       id: string;
       email: string;
@@ -16,23 +18,33 @@ declare global {
       emailVerified: boolean;
       isAdmin: boolean;
     }
+
+    interface Request {
+      user?: User;
+    }
   }
 }
 
+/**
+ * Reads the Better Auth session cookie, then loads the user from the database
+ * so bans and deactivations apply immediately (not after the cookie cache expires).
+ */
 export const authMiddleware = async (
   req: Request,
   _res: Response,
   next: NextFunction,
-) => {
+): Promise<void> => {
   try {
-    const token = req.cookies?.access_token;
-    if (!token) {
-      throw new AppError("Missing access token", 401);
+    const session = await auth.api.getSession({
+      headers: fromNodeHeaders(req.headers),
+    });
+    if (!session) {
+      throw new AppError("Not authenticated", 401);
     }
 
-    const payload = verifyAccessToken(token);
-    const user = await prisma.user.findUnique({ where: { id: payload.sub } });
-
+    const user = await prisma.user.findUnique({
+      where: { id: session.user.id },
+    });
     if (!user) {
       throw new AppError("User not found", 401);
     }
@@ -49,15 +61,8 @@ export const authMiddleware = async (
     };
 
     next();
-  } catch (error: any) {
-    if (
-      error?.name === "TokenExpiredError" ||
-      error?.name === "JsonWebTokenError"
-    ) {
-      next(new AppError("Invalid or expired access token", 401));
-    } else {
-      next(error);
-    }
+  } catch (error) {
+    next(error);
   }
 };
 

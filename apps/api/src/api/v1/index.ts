@@ -1,5 +1,4 @@
 import express from "express";
-import authRoutes from "./auth/auth.routes";
 import usersRoutes from "./users/users.routes";
 import sessionsRoutes from "./sessions/sessions.routes";
 import bookingsRoutes from "./bookings/bookings.routes";
@@ -13,8 +12,7 @@ import { authMiddleware, requireAuth } from "../../middleware/auth";
 
 const v1Router = express.Router();
 
-// Public routes
-v1Router.use("/auth", authRoutes);
+// Public routes (sign-in and sign-up live in Better Auth under /api/auth)
 v1Router.use("/webhooks", webhooksRoutes);
 
 // Protected routes

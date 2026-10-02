@@ -1,7 +1,8 @@
 import { Server as HttpServer } from "http";
 import { Server as SocketServer } from "socket.io";
-import jwt from "jsonwebtoken";
+import { fromNodeHeaders } from "better-auth/node";
 import { env } from "@focusUp/env/server";
+import { auth } from "./auth";
 import { redis } from "./redis";
 import { prisma } from "./prisma";
 
@@ -21,19 +22,18 @@ export function initializeSocket(httpServer: HttpServer) {
   // Authentication middleware
   notifications.use(async (socket, next) => {
     try {
-      // Get token from handshake auth or cookie
-      const token =
-        socket.handshake.auth?.token ||
-        parseCookies(socket.handshake.headers.cookie)?.access_token;
+      // The browser sends the Better Auth session cookie with the handshake.
+      const session = await auth.api.getSession({
+        headers: fromNodeHeaders(socket.handshake.headers),
+      });
 
-      if (!token) {
+      if (!session) {
         return next(new Error("Authentication required"));
       }
 
-      const payload = jwt.verify(token, process.env.JWT_SECRET!) as {
-        sub: string;
-      };
-      const user = await prisma.user.findUnique({ where: { id: payload.sub } });
+      const user = await prisma.user.findUnique({
+        where: { id: session.user.id },
+      });
 
       if (!user) {
         return next(new Error("User not found"));
@@ -49,8 +49,8 @@ export function initializeSocket(httpServer: HttpServer) {
       socket.data.email = user.email;
       socket.data.username = user.username;
       next();
-    } catch (err) {
-      next(new Error("Invalid token"));
+    } catch {
+      next(new Error("Authentication failed"));
     }
   });
 
@@ -81,17 +81,6 @@ export async function sendToUser(
 
   io.of("/notifications").to(socketId).emit(event, data);
   return true;
-}
-
-// Helper: parse cookies from header string
-function parseCookies(cookieHeader?: string): Record<string, string> {
-  if (!cookieHeader) return {};
-  return Object.fromEntries(
-    cookieHeader.split(";").map((c) => {
-      const [key, ...val] = c.trim().split("=");
-      return [key, val.join("=")];
-    }),
-  );
 }
 
 export { io };

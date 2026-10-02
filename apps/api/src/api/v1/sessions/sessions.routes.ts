@@ -1,16 +1,17 @@
 import express from 'express';
 import { SessionsController } from './sessions.controller';
+import { requireVerified } from '../../../middleware/require-verified';
 
 const router = express.Router();
 
-// GET /sessions/token/:sessionId — Generate LiveKit token for session room
-router.get('/token/:sessionId', SessionsController.getLivekitToken);
+// GET /sessions/token/:sessionId — Generate LiveKit token for session room (verified email required)
+router.get('/token/:sessionId', requireVerified, SessionsController.getLivekitToken);
 
 // PATCH /sessions/goal/:sessionId — Set user's goal for a session
 router.patch('/goal/:sessionId', SessionsController.setGoal);
 
-// PATCH /sessions/join/:sessionId — Mark a user as joined
-router.patch('/join/:sessionId', SessionsController.joinSession);
+// PATCH /sessions/join/:sessionId — Mark a user as joined (verified email required)
+router.patch('/join/:sessionId', requireVerified, SessionsController.joinSession);
 
 // PATCH /sessions/complete/:sessionId — Complete session
 router.patch('/complete/:sessionId', SessionsController.completeSession);

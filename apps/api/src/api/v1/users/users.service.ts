@@ -38,8 +38,7 @@ export class UsersService {
       throw new AppError("User not found", 404);
     }
 
-    const { passwordHash: _, ...safeUser } = user;
-    return safeUser;
+    return user;
   }
 
   static async updateProfile(userId: string, data: UpdateProfileInput) {
@@ -58,8 +57,7 @@ export class UsersService {
         ...(data.timezone && { timezone: data.timezone }),
       },
     });
-    const { passwordHash: _, ...safeUser } = updated;
-    return safeUser;
+    return updated;
   }
 
   static async getUserStats(userId: string) {
@@ -178,12 +176,12 @@ export class UsersService {
       },
     });
 
-    const { passwordHash: _, ...safeUser } = user;
-    return safeUser;
+    return user;
   }
 
   /**
-   * P3-17: GDPR data export — returns all user data except passwordHash.
+   * P3-17: GDPR data export — returns the user's own data. Credentials live in
+   * the Better Auth tables (Account, AuthSession) and are never exported.
    * Rate limited to 1/hour at the route level.
    */
   static async getDataExport(userId: string) {
@@ -208,7 +206,6 @@ export class UsersService {
             isAdmin: true,
             createdAt: true,
             updatedAt: true,
-            // passwordHash intentionally excluded
           },
         }),
         prisma.session.findMany({

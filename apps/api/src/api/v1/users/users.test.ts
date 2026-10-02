@@ -1,6 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import request from 'supertest';
-import jwt from 'jsonwebtoken';
 import app from '../../../app';
 import { prisma } from '../../../lib/prisma';
 import { PlanTier } from '@prisma/client';
@@ -18,12 +17,10 @@ vi.mock('../../../lib/prisma', () => ({
   },
 }));
 
-const SECRET = process.env.JWT_SECRET || 'fallback_secret_do_not_use';
+import { authCookie } from '../../../test/auth-mock';
 
-function authCookie(userId: string): string {
-  const token = jwt.sign({ sub: userId }, SECRET);
-  return `access_token=${token}`;
-}
+// Stand-in for Better Auth's session lookup (see test/auth-mock.ts).
+vi.mock('../../../lib/auth', async () => (await import('../../../test/auth-mock')).authModuleMock);
 
 describe('Users Endpoints', () => {
   beforeEach(() => {
@@ -31,13 +28,12 @@ describe('Users Endpoints', () => {
   });
 
   describe('GET /api/v1/users/me', () => {
-    it('should return current user without passwordHash', async () => {
+    it('should return the current user', async () => {
       const mockUser = {
         id: 'user-1',
         email: 'test@example.com',
         username: 'testuser',
         displayName: 'Test User',
-        passwordHash: 'hashed-password',
         planTier: PlanTier.FREE,
         isActive: true,
         isBanned: false,
@@ -53,7 +49,7 @@ describe('Users Endpoints', () => {
       expect(res.status).toBe(200);
       expect(res.body.data.user).toBeDefined();
       expect(res.body.data.user.id).toBe('user-1');
-      expect(res.body.data.user.passwordHash).toBeUndefined();
+      expect(res.body.data.user.email).toBe('test@example.com');
     });
 
     it('should return 401 if not authenticated', async () => {

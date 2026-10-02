@@ -5,14 +5,13 @@ import express, {
 } from "express";
 import cors from "cors";
 import helmet from "helmet";
-import cookieParser from "cookie-parser";
-import rateLimit from "express-rate-limit";
+import { toNodeHandler } from "better-auth/node";
 
 import v1Router from "./api/v1";
 
 import { errorHandler } from "./middleware/error-handler";
-import passport from "./config/passport";
 import { env } from "@focusUp/env/server";
+import { auth } from "./lib/auth";
 
 const app: Application = express();
 
@@ -34,7 +33,10 @@ app.use(
   }),
 );
 app.use(helmet());
-app.use(cookieParser());
+
+// Better Auth must see the raw request body, so it is mounted before express.json().
+app.all("/api/auth/*splat", toNodeHandler(auth));
+
 app.use(
   express.json({
     verify: (req: any, _res, buf) => {
@@ -42,20 +44,7 @@ app.use(
     },
   }),
 );
-app.use(passport.initialize());
 
-const authLimiter = rateLimit({
-  windowMs: 1 * 60 * 1000,
-  max: env.NODE_ENV === "test" ? 100 : 5,
-  message: {
-    error: "Too many requests, please try again later.",
-    statusCode: 429,
-  },
-  standardHeaders: true,
-  legacyHeaders: false,
-});
-
-app.use("/api/v1/auth", authLimiter);
 app.use("/api/v1", v1Router);
 
 app.get("/api/health", async (_req: Request, res: Response) => {

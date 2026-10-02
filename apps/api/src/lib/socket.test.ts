@@ -4,7 +4,6 @@ import { initializeSocket, sendToUser, io } from './socket';
 import { NotificationService } from '../services/notification.service';
 import { EmailService } from '../services/email.service';
 import { redis } from './redis';
-import jwt from 'jsonwebtoken';
 
 vi.mock('./redis', () => ({
   redis: {
@@ -13,6 +12,9 @@ vi.mock('./redis', () => ({
     del: vi.fn(),
   },
 }));
+
+// Stand-in for Better Auth (real session checks run in the integration suite).
+vi.mock('./auth', async () => (await import('../test/auth-mock')).authModuleMock);
 
 vi.mock('../services/email.service', () => ({
   EmailService: {
@@ -25,7 +27,6 @@ describe('Socket Gateway & Notifications', () => {
   
   beforeEach(() => {
     vi.resetAllMocks();
-    process.env.JWT_SECRET = 'test-secret';
 
     // Re-establish EmailService mock after reset
     (EmailService.sendBookingConfirmation as ReturnType<typeof vi.fn>).mockResolvedValue(undefined);

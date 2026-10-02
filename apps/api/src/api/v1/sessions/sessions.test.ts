@@ -1,6 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import request from 'supertest';
-import jwt from 'jsonwebtoken';
 import app from '../../../app';
 import { prisma } from '../../../lib/prisma';
 
@@ -57,12 +56,10 @@ vi.spyOn(console, 'error').mockImplementation(() => {});
 
 // ── Helpers ────────────────────────────────────────────────────────
 
-const SECRET = process.env.JWT_SECRET || 'fallback_secret_do_not_use';
+import { authCookie } from '../../../test/auth-mock';
 
-function authCookie(userId: string): string {
-  const token = jwt.sign({ sub: userId }, SECRET);
-  return `access_token=${token}`;
-}
+// Stand-in for Better Auth's session lookup (see test/auth-mock.ts).
+vi.mock('../../../lib/auth', async () => (await import('../../../test/auth-mock')).authModuleMock);
 
 const BASE_SESSION = {
   id: 'session-1',
@@ -101,6 +98,23 @@ describe('Sessions Endpoints', () => {
   // ── Token Generation ───────────────────────────────────────────
 
   describe('GET /api/v1/sessions/token/:sessionId', () => {
+    it('should return 403 when the email is not verified', async () => {
+      (prisma.user.findUnique as any).mockResolvedValueOnce({
+        id: 'user-1',
+        isActive: true,
+        isBanned: false,
+        emailVerified: false,
+      } as never);
+
+      const res = await request(app)
+        .get('/api/v1/sessions/token/session-1')
+        .set('Cookie', [authCookie('user-1')]);
+
+      expect(res.status).toBe(403);
+      expect(res.body.error).toBe('Please verify your email first');
+      expect(prisma.session.findUnique).not.toHaveBeenCalled();
+    });
+
     it('should return a token for a valid participant', async () => {
       // Auth middleware user lookup
       (prisma.user.findUnique as any).mockResolvedValueOnce({
@@ -110,6 +124,7 @@ describe('Sessions Endpoints', () => {
         planTier: 'FREE',
         isActive: true,
         isBanned: false,
+        emailVerified: true,
       } as never);
 
       // Session lookup in service
@@ -131,6 +146,7 @@ describe('Sessions Endpoints', () => {
         planTier: 'FREE',
         isActive: true,
         isBanned: false,
+        emailVerified: true,
       } as never);
 
       (prisma.session.findUnique as any).mockResolvedValueOnce(BASE_SESSION as never);
@@ -151,6 +167,7 @@ describe('Sessions Endpoints', () => {
         planTier: 'FREE',
         isActive: true,
         isBanned: false,
+        emailVerified: true,
       } as never);
 
       (prisma.session.findUnique as any).mockResolvedValueOnce({
@@ -174,6 +191,7 @@ describe('Sessions Endpoints', () => {
         planTier: 'FREE',
         isActive: true,
         isBanned: false,
+        emailVerified: true,
       } as never);
 
       (prisma.session.findUnique as any).mockResolvedValueOnce(null);
@@ -198,6 +216,7 @@ describe('Sessions Endpoints', () => {
         planTier: 'FREE',
         isActive: true,
         isBanned: false,
+        emailVerified: true,
       } as never);
 
       (prisma.session.findUnique as any).mockResolvedValueOnce(BASE_SESSION as never);
@@ -227,6 +246,7 @@ describe('Sessions Endpoints', () => {
         planTier: 'FREE',
         isActive: true,
         isBanned: false,
+        emailVerified: true,
       } as never);
 
       (prisma.session.findUnique as any).mockResolvedValueOnce(BASE_SESSION as never);
@@ -256,6 +276,7 @@ describe('Sessions Endpoints', () => {
         planTier: 'FREE',
         isActive: true,
         isBanned: false,
+        emailVerified: true,
       } as never);
 
       (prisma.session.findUnique as any).mockResolvedValueOnce(BASE_SESSION as never);
@@ -273,6 +294,22 @@ describe('Sessions Endpoints', () => {
   // ── Join logic ───────────────────────────────────────────────────
 
   describe('PATCH /api/v1/sessions/join/:sessionId', () => {
+    it('should return 403 when the email is not verified', async () => {
+      (prisma.user.findUnique as any).mockResolvedValueOnce({
+        id: 'user-1',
+        isActive: true,
+        isBanned: false,
+        emailVerified: false,
+      } as never);
+
+      const res = await request(app)
+        .patch('/api/v1/sessions/join/session-1')
+        .set('Cookie', [authCookie('user-1')]);
+
+      expect(res.status).toBe(403);
+      expect(prisma.session.update).not.toHaveBeenCalled();
+    });
+
     it('should stay CONFIRMED for first user join', async () => {
       (prisma.user.findUnique as any).mockResolvedValueOnce({
         id: 'user-1',
@@ -281,6 +318,7 @@ describe('Sessions Endpoints', () => {
         planTier: 'FREE',
         isActive: true,
         isBanned: false,
+        emailVerified: true,
       } as never);
 
       (prisma.session.findUnique as any).mockResolvedValueOnce(BASE_SESSION as never);
@@ -304,6 +342,7 @@ describe('Sessions Endpoints', () => {
         planTier: 'FREE',
         isActive: true,
         isBanned: false,
+        emailVerified: true,
       } as never);
 
       (prisma.session.findUnique as any).mockResolvedValueOnce(BASE_SESSION as never);
@@ -329,6 +368,7 @@ describe('Sessions Endpoints', () => {
         id: 'user-3',
         isActive: true,
         isBanned: false,
+        emailVerified: true,
       } as never);
       (prisma.session.findUnique as any).mockResolvedValueOnce(BASE_SESSION as never);
 
@@ -344,6 +384,7 @@ describe('Sessions Endpoints', () => {
         id: 'user-1',
         isActive: true,
         isBanned: false,
+        emailVerified: true,
       } as never);
       (prisma.session.findUnique as any).mockResolvedValueOnce({
         ...BASE_SESSION,
@@ -366,6 +407,7 @@ describe('Sessions Endpoints', () => {
         id: 'user-1',
         isActive: true,
         isBanned: false,
+        emailVerified: true,
       } as never);
 
       (prisma.session.findUnique as any).mockResolvedValueOnce({
@@ -391,6 +433,7 @@ describe('Sessions Endpoints', () => {
         id: 'user-1',
         isActive: true,
         isBanned: false,
+        emailVerified: true,
       } as never);
 
       (prisma.session.findUnique as any).mockResolvedValueOnce(BASE_SESSION as never);
@@ -407,6 +450,7 @@ describe('Sessions Endpoints', () => {
         id: 'user-3',
         isActive: true,
         isBanned: false,
+        emailVerified: true,
       } as never);
       (prisma.session.findUnique as any).mockResolvedValueOnce({
         ...BASE_SESSION,
@@ -429,6 +473,7 @@ describe('Sessions Endpoints', () => {
         id: 'user-1',
         isActive: true,
         isBanned: false,
+        emailVerified: true,
       } as never);
 
       (prisma.session.findUnique as any).mockResolvedValueOnce({
@@ -462,6 +507,7 @@ describe('Sessions Endpoints', () => {
         id: 'user-1',
         isActive: true,
         isBanned: false,
+        emailVerified: true,
       } as never);
 
       (prisma.session.findUnique as any).mockResolvedValueOnce(BASE_SESSION as never); // CONFIRMED status
@@ -479,6 +525,7 @@ describe('Sessions Endpoints', () => {
         id: 'user-3',
         isActive: true,
         isBanned: false,
+        emailVerified: true,
       } as never);
 
       (prisma.session.findUnique as any).mockResolvedValueOnce({ ...BASE_SESSION, status: 'COMPLETED' } as never);
@@ -496,6 +543,7 @@ describe('Sessions Endpoints', () => {
         id: 'user-1',
         isActive: true,
         isBanned: false,
+        emailVerified: true,
       } as never);
 
       (prisma.session.findUnique as any).mockResolvedValueOnce({ ...BASE_SESSION, status: 'COMPLETED' } as never);
@@ -514,6 +562,7 @@ describe('Sessions Endpoints', () => {
         id: 'user-1',
         isActive: true,
         isBanned: false,
+        emailVerified: true,
       } as never);
 
       (prisma.session.findUnique as any).mockResolvedValueOnce({ ...BASE_SESSION, status: 'COMPLETED' } as never);
@@ -535,6 +584,7 @@ describe('Sessions Endpoints', () => {
         id: 'user-1',
         isActive: true,
         isBanned: false,
+        emailVerified: true,
       } as any);
 
       (prisma.session.findMany as any).mockResolvedValue([
@@ -560,6 +610,7 @@ describe('Sessions Endpoints', () => {
         id: 'user-1',
         isActive: true,
         isBanned: false,
+        emailVerified: true,
       } as any);
 
       (prisma.session.findMany as any).mockResolvedValue([]);
@@ -592,6 +643,7 @@ describe('Sessions Endpoints', () => {
         id: 'user-1',
         isActive: true,
         isBanned: false,
+        emailVerified: true,
       } as any);
 
       (prisma.session.count as any).mockResolvedValue(15);
