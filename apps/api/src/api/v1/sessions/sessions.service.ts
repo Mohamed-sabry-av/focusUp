@@ -128,6 +128,9 @@ export class SessionsService {
   static async getUpcomingSessions(userId: string) {
     const now = new Date();
     const sevenDaysLater = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
+    // A session that has started but not ended is still "upcoming": the person must be able to join it.
+    const LONGEST_SESSION_MS = 75 * 60 * 1000;
+    const startedAfter = new Date(now.getTime() - LONGEST_SESSION_MS);
 
     const sessions = await prisma.session.findMany({
       where: {
@@ -138,7 +141,7 @@ export class SessionsService {
               { user2Id: userId },
             ],
           },
-          { scheduledAt: { gt: now, lt: sevenDaysLater } },
+          { scheduledAt: { gt: startedAfter, lt: sevenDaysLater } },
           {
             status: {
               in: ['PENDING', 'CONFIRMED', 'ACTIVE'],
@@ -169,14 +172,16 @@ export class SessionsService {
       },
     });
 
-    return sessions.map((session) => {
-      const isUser1 = session.user1Id === userId;
-      const partner = isUser1 ? session.user2 : session.user1;
-      return {
-        ...session,
-        partner,
-      };
-    });
+    return sessions
+      .filter((session) => session.scheduledAt.getTime() + session.durationMin * 60 * 1000 > now.getTime())
+      .map((session) => {
+        const isUser1 = session.user1Id === userId;
+        const partner = isUser1 ? session.user2 : session.user1;
+        return {
+          ...session,
+          partner,
+        };
+      });
   }
 
   /**

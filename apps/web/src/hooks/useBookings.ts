@@ -63,6 +63,7 @@ export function useCreateBooking() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['bookings'] });
       queryClient.invalidateQueries({ queryKey: ['sessions'] });
+      queryClient.invalidateQueries({ queryKey: ['upcomingSessions'] });
       queryClient.invalidateQueries({ queryKey: ['user', 'stats'] });
       queryClient.invalidateQueries({ queryKey: ['userStats'] });
     },
@@ -100,6 +101,7 @@ export function useCancelBooking() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['bookings'] });
       queryClient.invalidateQueries({ queryKey: ['sessions'] });
+      queryClient.invalidateQueries({ queryKey: ['upcomingSessions'] });
       queryClient.invalidateQueries({ queryKey: ['user', 'stats'] });
       queryClient.invalidateQueries({ queryKey: ['userStats'] });
     },

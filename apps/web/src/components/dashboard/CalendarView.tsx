@@ -15,6 +15,7 @@ import { useAvailableBookings, useUserBookings } from "@/hooks/useBookings";
 import type { AvailableBooking } from "@/hooks/useBookings";
 import { buildSelectedSlot, type SelectedSlot } from "@/lib/selected-slot";
 import { WaitingPerson } from "./WaitingPersonCard";
+import { CalendarSessionCard, type CalendarSession } from "./CalendarSessionCard";
 import { useUpcomingSessions } from "@/hooks/useSessions";
 import { useCurrentUser } from "@/hooks/useUser";
 import {
@@ -70,14 +71,14 @@ export function CalendarView({
   const myPendingBookings = myPendingData?.bookings || [];
 
   const { data: myUpcomingData } = useUpcomingSessions();
-  const mySessions = Array.isArray(myUpcomingData?.data)
+  const mySessions: CalendarSession[] = Array.isArray(myUpcomingData?.data)
     ? myUpcomingData.data
     : [];
 
   // Current Time Indicator
   const [now, setNow] = useState(new Date());
   useEffect(() => {
-    const timer = setInterval(() => setNow(new Date()), 60000);
+    const timer = setInterval(() => setNow(new Date()), 30000);
     return () => clearInterval(timer);
   }, []);
 
@@ -318,8 +319,7 @@ export function CalendarView({
               (b) => new Date(b.slotTime).toDateString() === dayStartStr,
             );
             const sessionsInColumn = mySessions.filter(
-              (s: any) =>
-                new Date(s.scheduledAt).toDateString() === dayStartStr,
+              (s) => new Date(s.scheduledAt).toDateString() === dayStartStr,
             );
 
             return (
@@ -508,46 +508,18 @@ export function CalendarView({
                   );
                 })}
 
-                {/* CONFIRMED SESSIONS - Focusmate style */}
-                {sessionsInColumn.map((s: any) => {
+                {/* MY MATCHED SESSIONS: the Join button lives on the card */}
+                {sessionsInColumn.map((s: CalendarSession) => {
                   const d = new Date(s.scheduledAt);
-                  const min = d.getHours() * 60 + d.getMinutes();
-                  const isUser1 = s.user1?.id === currentUserId;
-                  const partner = isUser1 ? s.user2 : s.user1;
-                  const pxHeight = s.durationMin * MINUTE_HEIGHT;
-                  const endMin = min + s.durationMin;
-                  const endH = Math.floor(endMin / 60);
-                  const endM = endMin % 60;
-                  const fmt = (h: number, m: number) => {
-                    const ap = h >= 12 ? "pm" : "am";
-                    const h12 = h === 0 ? 12 : h > 12 ? h - 12 : h;
-                    return `${h12}:${m.toString().padStart(2, "0")}${ap}`;
-                  };
                   return (
-                    <div
+                    <CalendarSessionCard
                       key={s.id}
-                      className="absolute left-1 right-2 rounded-xl bg-[#eef0fa] border-l-4 border-[#0245A3] shadow-sm z-20 overflow-hidden cursor-pointer hover:bg-[#e4e8f5] transition-colors"
-                      style={{ top: min * MINUTE_HEIGHT, height: pxHeight }}
-                    >
-                      <div className="p-2 flex items-start gap-2 h-full">
-                        <Avatar className="w-7 h-7 rounded-lg shrink-0 border border-white shadow-sm">
-                          <AvatarImage src={partner?.avatarUrl ?? undefined} />
-                          <AvatarFallback className="rounded-lg bg-[#8FBAF3]/30 text-[#0245A3] text-[10px] font-bold">
-                            {partner?.displayName?.charAt(0) ?? "?"}
-                          </AvatarFallback>
-                        </Avatar>
-                        <div className="flex-1 min-w-0">
-                          <div className="text-[11px] font-bold text-slate-800 truncate">
-                            {fmt(d.getHours(), d.getMinutes())} -{" "}
-                            {fmt(endH, endM % 60)}
-                          </div>
-                          <div className="text-[10px] text-slate-500 truncate">
-                            {partner?.displayName ?? "Matching..."}
-                          </div>
-                        </div>
-                        <Shuffle className="w-3 h-3 text-slate-400 shrink-0 mt-0.5" />
-                      </div>
-                    </div>
+                      session={s}
+                      currentUserId={currentUserId}
+                      now={now}
+                      top={(d.getHours() * 60 + d.getMinutes()) * MINUTE_HEIGHT}
+                      height={s.durationMin * MINUTE_HEIGHT}
+                    />
                   );
                 })}
               </div>
