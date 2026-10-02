@@ -23,9 +23,9 @@ reminders, dashboard, admin panel and analytics events.
 |---|---|---|---|
 | P1 | Experience | Match the Focusmate experience unless a row below says otherwise | — |
 | P2 | Calendar | Booked slots show other users' first name + photo. Privacy setting "hide my photo" shows initials instead | — |
-| P3 | Camera | Camera required for everyone. No camera-off option | Spec #12, camera line in "why us" |
+| P3 | Camera | Optional, chosen per booking. Soft preference, same as Quiet: a camera-off user is matched with a waiting camera-off user first; if none, with a camera-on user, and the partner sees a "Camera off" badge (avatar + name shown). First set to "required" in this session, then reversed by the founder the same day | Spec #12 (camera was a hard filter) |
 | P4 | Quiet mode | Soft preference. At booking, a Quiet user is matched with a waiting Quiet user first; if none is waiting, with a non-Quiet user, and the partner sees a "Quiet mode" badge | Spec #13 |
-| P5 | Matching filters | **Hard:** same start, same duration, not blocked (either way), account active, same gender if either side asked. **Soft:** Quiet, Desk/Walk. **Priority:** favorites | Spec §5.2 |
+| P5 | Matching filters | **Hard:** same start, same duration, not blocked (either way), account active, same gender if either side asked. **Soft:** camera on/off, Quiet, Desk/Walk. **Priority:** favorites | Spec §5.2 |
 | P6 | Match timing | A match locks at booking. The partner only changes if they cancel or no-show. T-10 relax for "flexible" bookings now only drops same-gender | Spec §5.3 |
 | P7 | No-show | Rematch offered at T+1 min. Solo session offered at T+3 (no quota, no strike). Absent user marked NO_SHOW + 1 strike at T+5 | Spec §5.3–5.4 |
 | P8 | Room tools (v1) | Goal + check-out (tasks done, 1–5 rating), report & block, text chat (LiveKit data channel), task list (≤ 10), screen share (opt-in, never auto-start) | — |

@@ -8,7 +8,7 @@ Items changed in v1.1 are marked **[v1.1]**. The reasons are logged in `docs/DEC
 
 - **What:** A web app where people book a 1:1 virtual co-working session (25 / 50 / 75 min) with a partner, so both actually start and finish their work. Body doubling, with the Focusmate experience.
 - **For whom:** university students, high-school students, freelancers and remote employees in the Arab world. Entry channels: NTI, ITIDA, university groups, freelancer communities, social content.
-- **Why us vs Focusmate:** cheaper with local payment, a more generous free tier (6 sessions/week), optional same-gender matching, a "hide my photo" privacy option, built for Arab users (Arabic in v2). **[v1.1]** Camera is required, as on Focusmate; the camera on/off choice is removed.
+- **Why us vs Focusmate:** cheaper with local payment, a more generous free tier (6 sessions/week), camera optional (unlike Focusmate), optional same-gender matching, a "hide my photo" privacy option, built for Arab users (Arabic in v2).
 - **MVP shape:** web only, English UI, scheduled booking only, 1:1 only. **[v1.1]** Built on the existing focusUp repo: Next.js 16 + Express REST (`apps/api`) + Prisma + PostgreSQL 17 + Redis/BullMQ + self-hosted LiveKit, all on one server with one domain.
 - **Success at 3 months after launch:** 100 weekly active users (WAU = users who completed ≥ 1 session that week).
 - **Owner & capacity:** solo founder, 20+ hours/week, infra budget < $50/month.
@@ -37,7 +37,7 @@ Legend used in this doc:
 | 9 | Durations | 25, 50, 75 minutes | [D] |
 | 10 | Booking | Scheduled only (no instant "Focus Now") | [D] |
 | 11 | Booking horizon | Up to 14 days ahead | [D] |
-| 12 | Camera | **[v1.1]** Camera required for everyone, as on Focusmate. No camera-off option | [D] |
+| 12 | Camera | **[v1.1]** Optional, chosen per booking. Soft preference: a camera-off user is matched with a waiting camera-off user first; if none, with a camera-on user, and the partner sees a "Camera off" badge (avatar + name shown) | [D] |
 | 13 | Quiet mode | **[v1.1]** Soft preference. A Quiet user is matched with a waiting Quiet user first; if none, with a non-Quiet user, and the partner sees a "Quiet mode" badge. Quiet users cannot unmute | [D] |
 | 14 | Desk / Walk | Session type labels kept as in Focusmate. Soft preference | [A] confirm |
 | 15 | Mic during focus | Optional (user decides) | [D] |
@@ -87,7 +87,7 @@ Legend used in this doc:
 
 - As a user, I book a 50-min session for tomorrow at 20:00, and the system finds me a partner.
 - **[v1.1]** As a user, I see who is already booked on the calendar, so I pick times where I'll get a partner.
-- **[v1.1]** As a user, I turn on Quiet mode, so I'm matched with other Quiet users when possible and my partner knows I won't talk.
+- **[v1.1]** As a user, I choose camera on/off and Quiet mode, so I'm matched with people who chose the same when possible, and my partner sees a badge when our choices differ.
 - **[v1.1]** As a user, I can hide my photo from the calendar and show initials instead.
 - As a user, I join the room, write my goal, optionally say hi, work, then mark what I finished.
 - As a user, if my partner doesn't show, I'm rematched or I continue solo, and I'm not punished.
@@ -107,7 +107,7 @@ Legend used in this doc:
 | Sign-up/login: phone OTP, Facebook | No | Yes |
 | Onboarding: display name + photo; timezone auto-detected from the browser | Yes | Yes |
 | Booking calendar: 14 days, 15-minute start slots, 25/50/75 min, booked people shown | Yes | Yes |
-| Booking options: Quiet, Desk/Walk, same-gender (optional), "flexible" | Yes | Yes |
+| Booking options: camera on/off, Quiet, Desk/Walk, same-gender (optional), "flexible" | Yes | Yes |
 | Matching engine (§5): favorites first, blocks respected, locks at booking | Yes | Yes |
 | Session room on LiveKit: video, audio, timer, goal, task list, text chat, opt-in screen share, report & block | Yes | Yes |
 | No-show handling: rematch at T+1, solo fallback at T+3 (§5.4) | Yes | Yes |
@@ -124,7 +124,6 @@ Legend used in this doc:
 - Arabic UI (RTL). Build v1 i18n-ready [R].
 - Public profile page.
 - Instant "Focus Now" matching.
-- **[v1.1]** Camera-off sessions.
 - Group sessions.
 - Verified focus hours / certificate.
 - Exam marathon mode.
@@ -146,7 +145,7 @@ Legend used in this doc:
 | T+1m | **[v1.1]** Partner not here yet → rematch offered if another compatible user is available |
 | T+3m | **[v1.1]** Still no partner → solo session offered (timer, no quota, no strike) |
 | T+5m | Absent user marked NO_SHOW + 1 strike |
-| T+2m → T+45m | Focus: camera on, mic optional (Quiet = mic disabled) |
+| T+2m → T+45m | Focus: camera per booking choice, mic optional (Quiet = mic disabled) |
 | T+45m | 5-minute warning |
 | T+48m → T+50m | Check-out: tick tasks done, short reflection, 1–5 self-rating, optional voice wrap-up |
 | T+50m | Session ends. Room closes at T+52m (grace) |
@@ -157,7 +156,7 @@ Legend used in this doc:
 
 | Feature | Rule |
 |---|---|
-| Video | **[v1.1]** Camera required. If the camera fails, show avatar + name and a "camera problem" notice [A] |
+| Video | Per booking: camera on/off. Camera-off users show avatar + name. **[v1.1]** When choices differ, the camera-on partner sees a "Camera off" badge |
 | Video quality | **[v1.1]** 960×540 @ 24 fps, max ~600 kbps, VP8 with simulcast, adaptive stream + dynacast. About 450 MB per 50-min session (send + receive) |
 | Mic | Optional; Quiet users cannot unmute. **[v1.1]** Partner of a Quiet user sees a "Quiet mode" badge |
 | Text chat | LiveKit data channel. [A] Not stored after the session (privacy); last 50 messages attached to a report if one is filed |
@@ -191,15 +190,16 @@ Two bookings are compatible when all hard filters match:
 | Same-gender requested by either side → genders must match | Hard, only if requested |
 | Not blocked in either direction | Hard |
 | Both active, not suspended/banned | Hard |
-| **[v1.1]** Quiet | Soft: prefer Quiet with Quiet; a cross-match shows the badge |
+| **[v1.1]** Camera on/off | Soft: prefer the same choice; a cross-match shows the "Camera off" badge |
+| **[v1.1]** Quiet | Soft: prefer Quiet with Quiet; a cross-match shows the "Quiet mode" badge |
 | Desk/Walk | Soft (prefer same) [A] |
 | Favorite | Priority (match favorites first) |
 
-**[v1.1]** Order among compatible waiting bookings [A]: favorites → same Quiet choice → same Desk/Walk → oldest booking.
+**[v1.1]** Order among compatible waiting bookings [A]: favorites → same camera choice → same Quiet choice → same Desk/Walk → oldest booking.
 
 Gender is not asked at onboarding. It is asked only when a user turns on "same-gender" for the first time.
 
-With camera required and Quiet soft, each start time has only 3 pools (one per duration), plus a split for users who ask for same-gender. v1 had 12.
+With camera and Quiet as soft preferences, each start time has only 3 pools (one per duration), plus a split for users who ask for same-gender. v1 had 12.
 
 ### 5.3 When matching runs
 
@@ -337,7 +337,7 @@ Postgres 17, Redis 7   → internal network only
 
 - Tokens generated server-side only, 2-hour TTL, in-memory on the client.
 - Room name = session id. adaptiveStream and dynacast on.
-- **[v1.1]** Quiet enforced in the token's permissions (no microphone source). Camera required for everyone.
+- Camera-off and Quiet enforced in the token's permissions (no camera / no microphone source).
 - **[v1.1]** Webhooks are signature-verified and are the source of truth for join/leave.
 
 ## 10. Data model (Prisma, simplified)
@@ -363,7 +363,8 @@ model Booking {             // one row per user per requested slot
   userId        String
   startAt       DateTime
   durationMin   Int           // 25 / 50 / 75
-  quiet         Boolean       // [v1.1] soft preference; cameraOn removed
+  cameraOn      Boolean       // [v1.1] soft preference
+  quiet         Boolean       // [v1.1] soft preference
   taskType      TaskType      // DESK / WALK
   sameGender    Boolean       @default(false)
   flexible      Boolean       @default(true)
@@ -478,4 +479,4 @@ Checked in mid-December 2026:
 | Version | Date | Changes |
 |---|---|---|
 | 1.0 | 1 Oct 2026 | First spec from the founder's grill session |
-| 1.1 | 2 Oct 2026 | Focusmate experience (camera required, soft Quiet, booked people on calendar, lock at booking, rematch T+1 / solo T+3); beta sign-in = email + Google; one-server hosting; REST-only backend, Better Auth, Redis/BullMQ, socket.io; video preset; beta date and success criteria. Details in `docs/DECISIONS.md` |
+| 1.1 | 2 Oct 2026 | Focusmate experience (camera and Quiet as soft preferences with badges, booked people on calendar, lock at booking, rematch T+1 / solo T+3); beta sign-in = email + Google; one-server hosting; REST-only backend, Better Auth, Redis/BullMQ, socket.io; video preset; beta date and success criteria. Details in `docs/DECISIONS.md` |
