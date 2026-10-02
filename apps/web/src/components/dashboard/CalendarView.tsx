@@ -14,6 +14,7 @@ import {
 import { useAvailableBookings, useUserBookings } from "@/hooks/useBookings";
 import type { AvailableBooking } from "@/hooks/useBookings";
 import { buildSelectedSlot, type SelectedSlot } from "@/lib/selected-slot";
+import { isSlotBlocked, isTooSoon, type TimeBlock } from "@/lib/slot-overlap";
 import { WaitingPerson } from "./WaitingPersonCard";
 import { CalendarSessionCard, type CalendarSession } from "./CalendarSessionCard";
 import { useUpcomingSessions } from "@/hooks/useSessions";
@@ -74,6 +75,16 @@ export function CalendarView({
   const mySessions: CalendarSession[] = Array.isArray(myUpcomingData?.data)
     ? myUpcomingData.data
     : [];
+
+  // Time the person already has. A new session may not overlap any of it.
+  const busyBlocks: TimeBlock[] = [
+    ...mySessions.map((s) => ({ start: s.scheduledAt, durationMin: s.durationMin })),
+    ...myPendingBookings.map((b: { slotTime: string; durationMin: number }) => ({
+      start: b.slotTime,
+      durationMin: b.durationMin,
+    })),
+    ...externalSelectedSlots.map((s) => ({ start: s.slotTime, durationMin: s.durationMin })),
+  ];
 
   // Current Time Indicator
   const [now, setNow] = useState(new Date());
@@ -316,7 +327,10 @@ export function CalendarView({
               (b: any) => new Date(b.slotTime).toDateString() === dayStartStr,
             );
             const availableInColumn = availableBookings.filter(
-              (b) => new Date(b.slotTime).toDateString() === dayStartStr,
+              (b) =>
+                new Date(b.slotTime).toDateString() === dayStartStr &&
+                !isTooSoon(b.slotTime, now) &&
+                !isSlotBlocked(b.slotTime, b.durationMin, busyBlocks),
             );
             const sessionsInColumn = mySessions.filter(
               (s) => new Date(s.scheduledAt).toDateString() === dayStartStr,
@@ -330,6 +344,7 @@ export function CalendarView({
                   isToday && "bg-slate-50/80",
                 )}
                 style={{ height: 24 * HOUR_HEIGHT }}
+                onMouseLeave={() => setHoverSlot(null)}
               >
                 {/* Horizontal hour lines */}
                 {hours.map((h) => (
@@ -358,26 +373,27 @@ export function CalendarView({
                 {/* 15-minute Interactive Zones */}
                 {Array.from({ length: 24 * 4 }).map((_, slotIdx) => {
                   const minuteOfDay = slotIdx * 15;
-                  const isPast = isToday && minuteOfDay < currentMin - 5;
+                  const slotStart = new Date(day);
+                  slotStart.setHours(Math.floor(minuteOfDay / 60), minuteOfDay % 60, 0, 0);
+                  // Not selectable: too soon to start, or it would overlap time that is already taken.
+                  const unavailable =
+                    isTooSoon(slotStart, now) || isSlotBlocked(slotStart, durationSelected, busyBlocks);
 
                   return (
                     <div
                       key={slotIdx}
-                      className="absolute w-full"
+                      className={cn("absolute w-full", unavailable && "cursor-not-allowed")}
                       style={{
                         top: minuteOfDay * MINUTE_HEIGHT,
                         height: SLOT_HEIGHT,
                       }}
                       onMouseEnter={() => {
-                        if (!isPast) {
-                          setHoverSlot({ dateIdx, minuteOfDay });
-                        }
+                        setHoverSlot(unavailable ? null : { dateIdx, minuteOfDay });
                       }}
                       onClick={() => {
-                        if (!isPast) {
-                          selectSlot(dateIdx, minuteOfDay);
-                          setHoverSlot(null);
-                        }
+                        if (unavailable) return;
+                        selectSlot(dateIdx, minuteOfDay);
+                        setHoverSlot(null);
                       }}
                     />
                   );

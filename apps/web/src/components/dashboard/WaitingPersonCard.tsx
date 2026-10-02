@@ -83,8 +83,8 @@ export function WaitingPerson({ booking, top, onSelect }: WaitingPersonProps) {
         )}
       </button>
 
-      {/* Hover / focus card */}
-      <div className="absolute right-full top-0 pr-2 hidden group-hover:block group-focus-within:block">
+      {/* Hover / focus card. It opens after a short hover, so moving the mouse across the calendar does not flash it. */}
+      <div className="invisible absolute right-full top-0 pr-2 opacity-0 transition-[opacity,visibility] group-hover:visible group-hover:opacity-100 group-hover:delay-300 group-focus-within:visible group-focus-within:opacity-100">
       <div className="w-56 rounded-xl bg-white border border-slate-200 shadow-xl p-3">
         <div className="flex items-start gap-2">
           <div className="min-w-0 flex-1">
